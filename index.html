@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wardrobe — prototype</title>
+<style>
+  :root{
+    --bg:#0f1113; --surface:#191c1f; --surface-2:#22262a; --line:#2e3338;
+    --text:#e9ecef; --muted:#8b949e; --accent:#7dd3a8; --accent-dim:#2f5f4a;
+    --warn:#e0b464; --radius:14px;
+    --f: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f6f7f8; --surface:#fff; --surface-2:#eef0f2; --line:#dfe3e7;
+           --text:#14171a; --muted:#5c6670; --accent:#1f8a5b; --accent-dim:#cdeadc; }
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#000;font-family:var(--f);display:flex;justify-content:center;
+       align-items:flex-start;min-height:100vh;padding:0}
+  .phone{width:100%;max-width:430px;min-height:100vh;background:var(--bg);color:var(--text);
+         display:flex;flex-direction:column;position:relative;overflow:hidden}
+
+  header{padding:18px 18px 10px;display:flex;justify-content:space-between;align-items:flex-end;
+         border-bottom:1px solid var(--line)}
+  h1{font-size:21px;margin:0;letter-spacing:-.02em;font-weight:640}
+  .sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .timer{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;
+         background:var(--surface-2);padding:4px 9px;border-radius:99px;border:1px solid var(--line)}
+  .timer.hot{color:var(--warn);border-color:var(--warn)}
+
+  main{flex:1;overflow-y:auto;padding:14px 18px 110px}
+  .view{display:none} .view.on{display:block}
+
+  .slots{display:flex;gap:7px;margin-bottom:15px;overflow-x:auto;padding-bottom:2px}
+  .slot{flex:0 0 auto;padding:7px 14px;border-radius:99px;background:var(--surface);
+        border:1px solid var(--line);font-size:13px;color:var(--muted);cursor:pointer;
+        transition:.14s;font-weight:520}
+  .slot.on{background:var(--accent);color:#08130d;border-color:var(--accent);font-weight:640}
+
+  .quick{display:flex;gap:8px;margin-bottom:16px}
+  .quick button{flex:1;padding:11px 8px;border-radius:11px;background:var(--surface);
+    border:1px solid var(--line);color:var(--text);font-size:12.5px;font-family:var(--f);
+    cursor:pointer;font-weight:540}
+  .quick button:active{background:var(--surface-2)}
+
+  .lbl{font-size:10.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--muted);
+       margin:20px 0 9px;font-weight:640}
+  .lbl:first-child{margin-top:0}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .card{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius);
+        overflow:hidden;cursor:pointer;transition:.12s;position:relative}
+  .card:active{transform:scale(.965)}
+  .card.on{border-color:var(--accent);background:var(--accent-dim)}
+  .sw{height:64px;display:block}
+  .meta{padding:7px 8px 9px}
+  .nm{font-size:11.5px;line-height:1.25;font-weight:560;display:-webkit-box;
+      -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .br{font-size:9.5px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.04em}
+  .tick{position:absolute;top:6px;right:6px;width:19px;height:19px;border-radius:50%;
+        background:var(--accent);color:#08130d;font-size:12px;display:none;
+        align-items:center;justify-content:center;font-weight:800}
+  .card.on .tick{display:flex}
+  .worn{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.62);color:#fff;
+        font-size:9px;padding:2px 6px;border-radius:99px;font-weight:640}
+
+  .bar{position:absolute;bottom:58px;left:0;right:0;padding:11px 18px;
+       background:linear-gradient(to top,var(--bg) 62%,transparent);display:flex;gap:10px;align-items:center}
+  .cnt{font-size:12.5px;color:var(--muted);flex:1}
+  .save{padding:13px 26px;border-radius:12px;background:var(--accent);color:#08130d;
+        border:0;font-size:14.5px;font-weight:700;font-family:var(--f);cursor:pointer}
+  .save:disabled{opacity:.3}
+
+  nav{position:absolute;bottom:0;left:0;right:0;height:58px;background:var(--surface);
+      border-top:1px solid var(--line);display:flex}
+  nav button{flex:1;background:0;border:0;color:var(--muted);font-size:10.5px;
+             font-family:var(--f);cursor:pointer;display:flex;flex-direction:column;
+             align-items:center;justify-content:center;gap:3px;font-weight:560}
+  nav button.on{color:var(--accent)}
+  nav .ic{font-size:17px;line-height:1}
+
+  textarea{width:100%;min-height:130px;background:var(--surface);border:1px solid var(--line);
+    border-radius:12px;padding:13px;color:var(--text);font-family:var(--f);font-size:14px;
+    line-height:1.6;resize:vertical}
+  textarea::placeholder{color:var(--muted)}
+  .go{width:100%;margin-top:11px;padding:13px;border-radius:12px;background:var(--accent);
+      color:#08130d;border:0;font-size:14.5px;font-weight:700;font-family:var(--f);cursor:pointer}
+
+  .hit{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+       padding:12px;margin-bottom:11px;display:flex;gap:12px}
+  .hit .sw{width:56px;height:70px;border-radius:9px;flex:0 0 auto}
+  .hit h4{margin:0 0 3px;font-size:13.5px;font-weight:620}
+  .hit .d{font-size:11.5px;color:var(--muted);line-height:1.5}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;padding:3px 7px;
+    border-radius:99px;font-weight:700;letter-spacing:.03em;margin-top:7px}
+  .b-r{background:var(--accent-dim);color:var(--accent)}
+  .b-c{background:rgba(224,180,100,.16);color:var(--warn)}
+  .acts{display:flex;gap:7px;margin-top:9px}
+  .acts button{padding:6px 13px;border-radius:8px;font-size:11.5px;font-family:var(--f);
+    cursor:pointer;border:1px solid var(--line);background:var(--surface-2);color:var(--text);font-weight:560}
+  .acts .yes{background:var(--accent);color:#08130d;border-color:var(--accent);font-weight:700}
+
+  .note{font-size:11.5px;color:var(--muted);line-height:1.6;background:var(--surface);
+        border-left:2px solid var(--warn);padding:10px 12px;border-radius:0 9px 9px 0;margin:14px 0}
+
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  .tile .v{font-size:25px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .tile .k{font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+  .tile.wide{grid-column:1/-1}
+  .est{font-size:9.5px;color:var(--warn);margin-top:6px;font-weight:600}
+
+  .row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .row .sw{width:34px;height:42px;border-radius:7px;flex:0 0 auto}
+  .row .t{flex:1;font-size:13px;font-weight:540}
+  .row .t small{display:block;color:var(--muted);font-size:10.5px;font-weight:400;margin-top:2px}
+  .row .n{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+
+  .toast{position:absolute;bottom:130px;left:50%;transform:translate(-50%,22px);
+    background:var(--accent);color:#08130d;padding:11px 20px;border-radius:99px;font-size:13.5px;
+    font-weight:700;opacity:0;transition:.26s;pointer-events:none;white-space:nowrap}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .empty{text-align:center;color:var(--muted);font-size:13px;padding:44px 20px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <header>
+    <div>
+      <h1 id="ttl">Today</h1>
+      <div class="sub" id="sub">Friday, 14 August</div>
+    </div>
+    <div class="timer" id="timer">0.0s</div>
+  </header>
+
+  <main>
+    <!-- ============ TODAY ============ -->
+    <section class="view on" id="v-today">
+      <div class="slots" id="slots"></div>
+      <div class="quick">
+        <button onclick="repeat('yesterday')">↺ Same as yesterday</button>
+        <button onclick="repeat('template')">★ Office Standard</button>
+      </div>
+      <div id="groups"></div>
+    </section>
+
+    <!-- ============ ADD ============ -->
+    <section class="view" id="v-add">
+      <div class="lbl">Describe what you've got</div>
+      <textarea id="prose" placeholder="blue carpenter style pants from the gap
+navy buck mason jeans, the standard fit
+brown allen edmonds monk straps"></textarea>
+      <button class="go" onclick="findIt()">Search receipts &amp; catalogues</button>
+      <div id="hits" style="margin-top:20px"></div>
+    </section>
+
+    <!-- ============ CLOSET ============ -->
+    <section class="view" id="v-closet">
+      <div class="lbl">All items · 8</div>
+      <div id="closet"></div>
+    </section>
+
+    <!-- ============ STATS ============ -->
+    <section class="view" id="v-stats">
+      <div class="lbl">After 14 days of logging</div>
+      <div class="tiles">
+        <div class="tile"><div class="v">31%</div><div class="k">of closet worn in last 90 days</div></div>
+        <div class="tile"><div class="v">$1,240</div><div class="k">idle capital — zero wears in 12mo</div></div>
+        <div class="tile wide">
+          <div class="v">$4.12</div>
+          <div class="k">median cost per wear, trending ↓ from $6.80</div>
+          <div class="est">⚠ 3 items priced from catalogue list — estimates, not receipts</div>
+        </div>
+      </div>
+      <div class="lbl">Most worn</div>
+      <div id="lead"></div>
+      <div class="note"><strong>Everything here is placeholder.</strong> Real numbers need 14 days
+      of actual logging — that gate is the point, not a formality.</div>
+    </section>
+  </main>
+
+  <div class="bar" id="bar">
+    <div class="cnt" id="cnt">Nothing selected</div>
+    <button class="save" id="save" disabled onclick="saveLog()">Log it</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <nav>
+    <button class="on" onclick="go('today',this)"><span class="ic">◉</span>Today</button>
+    <button onclick="go('closet',this)"><span class="ic">▦</span>Closet</button>
+    <button onclick="go('add',this)"><span class="ic">＋</span>Add</button>
+    <button onclick="go('stats',this)"><span class="ic">◫</span>Stats</button>
+  </nav>
+</div>
+
+<script>
+// ---- placeholder wardrobe, using Joe's real brands -------------------------
+const ITEMS = [
+  {id:1, n:"Standard jeans",     b:"Buck Mason",    l:"pants",     c:"#2b3a52", w:14},
+  {id:2, n:"Business pants",     b:"Bonobos",       l:"pants",     c:"#28324a", w:6},
+  {id:3, n:"Grey sweats",        b:"Muji",          l:"pants",     c:"#6b7078", w:9},
+  {id:4, n:"Best oxford",        b:"Todd Snyder",   l:"shirt",     c:"#9fbcd4", w:11},
+  {id:5, n:"White waffle",       b:"Buck Mason",    l:"shirt",     c:"#eceae4", w:4},
+  {id:6, n:"Plain blue tee",     b:"Buck Mason",    l:"shirt",     c:"#33405c", w:17},
+  {id:7, n:"Wool sport-coat",    b:"Todd Snyder",   l:"outer",     c:"#26314a", w:3},
+  {id:8, n:"Cashmere hoodie",    b:"Khan Bogd",     l:"outer",     c:"#a8bed2", w:8},
+  {id:9, n:"Monk straps",        b:"Allen Edmonds", l:"shoes",     c:"#6b4526", w:5},
+  {id:10,n:"237s",               b:"New Balance",   l:"shoes",     c:"#2f3b54", w:12},
+  {id:11,n:"Dress belt",         b:"Mr. Lentz",     l:"accessory", c:"#7a4f2d", w:10},
+];
+const LAYERS = [["shirt","Shirt"],["pants","Pants"],["outer","Outer"],["shoes","Shoes"],["accessory","Accessories"]];
+const SLOTS  = [["primary","Primary"],["evening","Evening"],["gym","Gym"],["bed","Bed"],["travel","Travel"]];
+
+let slot="primary", picked=new Set(), t0=null, tick=null;
+
+// ---- timer: makes the 15-second design constraint visible ------------------
+function startTimer(){
+  if(t0) return;
+  t0=Date.now();
+  tick=setInterval(()=>{
+    const s=(Date.now()-t0)/1000;
+    const el=document.getElementById('timer');
+    el.textContent=s.toFixed(1)+'s';
+    el.classList.toggle('hot', s>15);
+  },100);
+}
+function resetTimer(){ clearInterval(tick); t0=null;
+  const el=document.getElementById('timer'); el.textContent='0.0s'; el.classList.remove('hot'); }
+
+// ---- render ----------------------------------------------------------------
+function renderSlots(){
+  document.getElementById('slots').innerHTML = SLOTS.map(([k,v])=>
+    `<div class="slot ${k===slot?'on':''}" onclick="setSlot('${k}')">${v}</div>`).join('');
+}
+function setSlot(k){ slot=k; picked.clear(); renderSlots(); renderGroups(); sync(); }
+
+function renderGroups(){
+  document.getElementById('groups').innerHTML = LAYERS.map(([k,label])=>{
+    const list = ITEMS.filter(i=>i.l===k);
+    if(!list.length) return '';
+    return `<div class="lbl">${label}</div><div class="grid">` + list.map(i=>`
+      <div class="card ${picked.has(i.id)?'on':''}" onclick="pick(${i.id})">
+        <span class="sw" style="background:${i.c}"></span>
+        <span class="worn">${i.w}×</span><span class="tick">✓</span>
+        <div class="meta"><div class="nm">${i.n}</div><div class="br">${i.b}</div></div>
+      </div>`).join('') + `</div>`;
+  }).join('');
+}
+function pick(id){ startTimer(); picked.has(id)?picked.delete(id):picked.add(id); renderGroups(); sync(); }
+function sync(){
+  const n=picked.size;
+  document.getElementById('cnt').textContent = n? `${n} item${n>1?'s':''} selected` : 'Nothing selected';
+  document.getElementById('save').disabled = !n;
+}
+function repeat(kind){
+  startTimer();
+  picked = new Set(kind==='yesterday' ? [1,6,10,11] : [2,4,7,9,11]);
+  renderGroups(); sync();
+}
+function saveLog(){
+  const s = t0 ? ((Date.now()-t0)/1000).toFixed(1) : '0.0';
+  toast(`Logged in ${s}s`);
+  picked.clear(); renderGroups(); sync(); resetTimer();
+}
+function toast(m){
+  const el=document.getElementById('toast'); el.textContent=m; el.classList.add('on');
+  setTimeout(()=>el.classList.remove('on'),1900);
+}
+
+// ---- describe-it: the provenance distinction made visible ------------------
+const HITS = [
+  {n:"Lightweight Carpenter Pants", b:"Gap", c:"#3d5madd", col:"#3d5a80",
+   d:"Blue · 32×34 · found in your Gap eReceipt, 23 Oct 2025, in-store 5th Ave",
+   price:"$34.97 paid", type:"receipt"},
+  {n:"Utility Carpenter Pants", b:"Gap", col:"#46628c",
+   d:"Blue · matched from Gap's current catalogue — no receipt found",
+   price:"$79.95 list", type:"catalog"},
+];
+function findIt(){
+  const box=document.getElementById('hits');
+  if(!document.getElementById('prose').value.trim()){
+    box.innerHTML=`<div class="empty">Type a description first.<br>Plain prose is fine.</div>`; return;
+  }
+  box.innerHTML = `<div class="lbl">2 candidates · “blue carpenter pants from the gap”</div>` +
+    HITS.map(h=>`
+    <div class="hit">
+      <span class="sw" style="background:${h.col}"></span>
+      <div style="flex:1">
+        <h4>${h.n}</h4>
+        <div class="d">${h.b} — ${h.price}</div>
+        <div class="d" style="margin-top:4px">${h.d}</div>
+        <span class="badge ${h.type==='receipt'?'b-r':'b-c'}">
+          ${h.type==='receipt'?'✓ RECEIPT — REAL PRICE':'≈ CATALOGUE — LIST PRICE'}
+        </span>
+        <div class="acts">
+          <button class="yes" onclick="toast('Added to closet')">That's it</button>
+          <button onclick="toast('Dismissed')">Not it</button>
+        </div>
+      </div>
+    </div>`).join('') +
+    `<div class="note"><strong>Why the two badges look different.</strong> A receipt match carries
+     what you actually paid. A catalogue match carries <em>list</em> price — and nobody pays list.
+     Conflating them makes cost-per-wear look authoritative while being wrong. Estimates stay
+     flagged everywhere until a receipt upgrades them.</div>`;
+}
+
+// ---- other views -----------------------------------------------------------
+function renderCloset(){
+  document.getElementById('closet').innerHTML = ITEMS.map(i=>`
+    <div class="row"><span class="sw" style="background:${i.c}"></span>
+      <div class="t">${i.n}<small>${i.b} · ${i.l}</small></div>
+      <div class="n">${i.w}×</div></div>`).join('');
+}
+function renderLead(){
+  document.getElementById('lead').innerHTML = [...ITEMS].sort((a,b)=>b.w-a.w).slice(0,5).map(i=>`
+    <div class="row"><span class="sw" style="background:${i.c}"></span>
+      <div class="t">${i.n}<small>${i.b}</small></div>
+      <div class="n">${i.w}×</div></div>`).join('');
+}
+
+const TITLES={today:["Today","Friday, 14 August"],closet:["Closet","11 items tracked"],
+              add:["Add items","Describe it in plain English"],stats:["Stats","Placeholder data"]};
+function go(v,btn){
+  document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
+  document.getElementById('v-'+v).classList.add('on');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('ttl').textContent=TITLES[v][0];
+  document.getElementById('sub').textContent=TITLES[v][1];
+  document.getElementById('bar').style.display = v==='today'?'flex':'none';
+  document.getElementById('timer').style.display = v==='today'?'block':'none';
+  if(v==='closet') renderCloset();
+  if(v==='stats')  renderLead();
+}
+
+renderSlots(); renderGroups(); sync();
+</script>
+</body>
+</html>
