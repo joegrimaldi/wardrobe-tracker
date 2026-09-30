@@ -4,605 +4,1184 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Wardrobe">
-<meta name="theme-color" content="#151A1F">
+<meta name="theme-color" content="#15171A">
+<meta name="color-scheme" content="dark">
 <title>Wardrobe</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   WARDROBE — care-label visual system
-   Palette drawn from the closet itself: selvedge indigo ground,
-   raw canvas type, brass hardware accent, rust for anything
-   the data can't vouch for.
+   WARDROBE — phone-first rebuild (2026-09-30)
+   Tokens from the approved canvas.
    ============================================================ */
 :root{
-  --ground:#151A1F;
-  --panel:#1E252C;
-  --panel-hi:#28313A;
-  --rule:#333F4A;
-  --ecru:#E7E1D3;
-  --ecru-dim:#96A0AA;
-  --chalk:#FFFFFF;
-  --brass:#C99A3B;
-  --indigo:#5B87C4;
-  --rust:#C4573A;
-  --sage:#7FA07A;
-
-  --mono:'IBM Plex Mono',ui-monospace,monospace;
-  --cond:'IBM Plex Sans Condensed',system-ui,sans-serif;
-  --sans:'IBM Plex Sans',system-ui,sans-serif;
-
-  --tap:52px;
+  --ground:#15171A;
+  --surface:#1E2125;
+  --bar:#1A1C20;
+  --line:#2C3036;
+  --row:#24272C;
+  --line-soft:#4A4F57;
+  --text:#EEE7D7;
+  --muted:#A19E95;
+  --accent:#D6B36A;
+  --on-accent:#15171A;
+  --warn:#E09A64;
+  --warn-line:#C9824E;
+  --danger:#C4573A;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Helvetica Neue',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --sat:env(safe-area-inset-top,0px);
+  --sab:env(safe-area-inset-bottom,0px);
+  --nav-h:calc(58px + var(--sab));
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;min-width:0}
+html{background:var(--ground);overflow-x:hidden}
 body{
-  background:var(--ground);
-  color:var(--ecru);
-  font-family:var(--sans);
-  font-size:16px;
-  line-height:1.45;
-  padding-bottom:calc(96px + env(safe-area-inset-bottom));
-  -webkit-font-smoothing:antialiased;
+  margin:0;background:var(--ground);color:var(--text);
+  font-family:var(--sans);font-size:16px;line-height:1.4;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;max-width:100vw;
+  overscroll-behavior-y:none;
 }
-button{font-family:inherit;font-size:inherit;color:inherit;border:0;background:none;cursor:pointer}
-input,select{font-family:inherit;font-size:16px}
+button{font-family:inherit;font-size:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;text-align:inherit}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--text)}
+img{max-width:100%;display:block}
+a{color:var(--accent);text-decoration:none}
+[hidden]{display:none!important}
 
-/* ---- care-label micro type -------------------------------- */
-.lbl{
-  font-family:var(--cond);
-  font-weight:600;
-  text-transform:uppercase;
-  letter-spacing:.14em;
-  font-size:11px;
-  color:var(--ecru-dim);
-}
+/* ---- type ---- */
+.lbl{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.lbl.accent{color:var(--accent)}
+.lbl.warn{color:var(--warn)}
+.mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.brand{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block}
+h1{margin:0;font-size:30px;font-weight:600;line-height:1.15;overflow-wrap:anywhere}
+h1.sm{font-size:28px}
+h2{margin:0;font-size:17px;font-weight:600}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.name{display:block;font-size:15px;line-height:1.3;overflow-wrap:anywhere;word-break:break-word}
 
-/* ---- header ------------------------------------------------ */
-header{
-  padding:calc(14px + env(safe-area-inset-top)) 18px 12px;
-  border-bottom:1px solid var(--rule);
-  position:sticky;top:0;z-index:20;
-  background:var(--ground);
-}
-.brandrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-h1{
-  font-family:var(--cond);
-  font-weight:700;
-  text-transform:uppercase;
-  letter-spacing:.22em;
-  font-size:15px;
-  margin:0;
-  color:var(--chalk);
-}
-.stamp{
-  font-family:var(--mono);
-  font-size:11px;
-  color:var(--brass);
-  border:1px solid var(--brass);
-  padding:2px 7px;
-  letter-spacing:.06em;
-}
+/* ---- layout ---- */
+#view{padding:calc(var(--sat) + 22px) 20px calc(var(--nav-h) + 24px)}
+.stack{display:flex;flex-direction:column;gap:18px}
+.stack.tight{gap:10px}
+.between{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.card.accent{border-color:var(--accent)}
+.card.dashed{border-style:dashed;border-color:var(--line-soft)}
 
-/* ---- freshness footer strip -------------------------------- */
-#freshness{
-  margin-top:10px;
-  font-family:var(--mono);
-  font-size:11px;
-  color:var(--ecru-dim);
-  display:flex;flex-wrap:wrap;gap:4px 14px;
-  align-items:center;
-}
-#freshness b{color:var(--ecru);font-weight:500}
-.dot{width:6px;height:6px;border-radius:50%;background:var(--sage);display:inline-block;margin-right:6px}
-.dot.stale{background:var(--brass)}
-.dot.dead{background:var(--rust)}
-
-/* ---- loud error -------------------------------------------- */
-#err{
-  display:none;
-  margin:0;
-  padding:14px 18px;
-  background:var(--rust);
-  color:#fff;
-  font-family:var(--mono);
-  font-size:13px;
-  line-height:1.5;
-  border-bottom:2px solid #fff;
-}
-#err.show{display:block}
-#err .lbl{color:rgba(255,255,255,.85);display:block;margin-bottom:5px}
-
-/* ---- controls row ------------------------------------------ */
-.controls{
-  display:flex;gap:10px;padding:14px 18px 4px;flex-wrap:wrap;align-items:flex-end;
-}
-.field{display:flex;flex-direction:column;gap:5px}
-.field input,.field select{
-  background:var(--panel);
-  border:1px solid var(--rule);
-  color:var(--ecru);
-  padding:9px 10px;
-  font-family:var(--mono);
-  border-radius:0;
-}
-.field input:focus-visible,.field select:focus-visible,button:focus-visible{
-  outline:2px solid var(--brass);outline-offset:2px;
-}
-
-/* ---- layer sections ---------------------------------------- */
-section.layer{padding:18px 18px 0}
-.layerhead{
-  display:flex;align-items:center;gap:10px;margin-bottom:10px;
-}
-.layerhead .rule{flex:1;height:1px;background:var(--rule)}
-
-/* ---- item rows: the care label ----------------------------- */
-.item{
-  display:flex;align-items:center;gap:12px;
-  width:100%;text-align:left;
-  min-height:var(--tap);
-  padding:9px 12px;
-  background:var(--panel);
-  border:1px solid var(--rule);
-  margin-bottom:7px;
-  transition:background .12s ease,border-color .12s ease;
-}
-.item[aria-pressed="true"]{
-  background:var(--panel-hi);
-  border-color:var(--brass);
-}
-.tag{
-  font-family:var(--mono);
-  font-size:11px;
-  letter-spacing:.04em;
-  color:var(--ground);
-  background:var(--ecru-dim);
-  padding:3px 6px;
-  flex:0 0 auto;
-  min-width:60px;
-  text-align:center;
-}
-.item[aria-pressed="true"] .tag{background:var(--brass);color:var(--ground)}
-.itemmain{flex:1;min-width:0}
-.itemname{
-  font-family:var(--cond);
-  font-weight:600;
-  font-size:16px;
-  color:var(--ecru);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.item[aria-pressed="true"] .itemname{color:var(--chalk)}
-.itemmeta{
-  font-family:var(--mono);
-  font-size:11px;
-  color:var(--ecru-dim);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.unverified{color:var(--rust)}
-.check{
-  font-family:var(--mono);font-size:18px;color:var(--brass);
-  flex:0 0 auto;width:18px;text-align:center;opacity:0;
-}
-.item[aria-pressed="true"] .check{opacity:1}
-
-/* ---- empty / loading --------------------------------------- */
-.notice{
-  margin:28px 18px;padding:20px;
-  border:1px dashed var(--rule);
-  font-family:var(--mono);font-size:13px;color:var(--ecru-dim);
-  line-height:1.6;
-}
-.notice b{color:var(--ecru);font-weight:500}
-
-/* ---- bottom bar: the tear-off ------------------------------ */
-#bar{
-  position:fixed;left:0;right:0;bottom:0;z-index:30;
-  background:var(--panel);
-  border-top:1px solid var(--rule);
-  padding:10px 14px calc(10px + env(safe-area-inset-bottom));
-  display:flex;gap:10px;align-items:center;
-}
-#bar::before{
-  content:'';position:absolute;top:-5px;left:0;right:0;height:4px;
-  background-image:radial-gradient(circle at 4px 2px,var(--rule) 1.5px,transparent 1.6px);
-  background-size:9px 4px;
-}
-#tally{
-  font-family:var(--mono);font-size:12px;color:var(--ecru-dim);
-  flex:1;line-height:1.35;
-}
-#tally b{color:var(--chalk);font-weight:600}
+/* ---- buttons ---- */
 .btn{
-  font-family:var(--cond);font-weight:700;text-transform:uppercase;
-  letter-spacing:.12em;font-size:13px;
-  padding:0 18px;height:var(--tap);
-  background:var(--brass);color:var(--ground);
-  flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  min-height:44px;padding:0 16px;border-radius:8px;font-size:15px;font-weight:500;
+  border:1px solid var(--line-soft);color:var(--text);background:transparent;
 }
-.btn:disabled{background:var(--rule);color:var(--ecru-dim);cursor:default}
-.btn.ghost{background:none;border:1px solid var(--rule);color:var(--ecru);padding:0 14px}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
+.btn.big{min-height:56px;border-radius:10px;font-size:17px}
+.btn.outline{border-color:var(--accent);color:var(--accent)}
+.btn.dashed{border-style:dashed;border-color:var(--line-soft)}
+.btn.warn{border-color:var(--warn-line);color:var(--warn)}
+.btn.small{min-height:36px;padding:0 12px;font-size:13px}
+.btn.danger{border-color:var(--danger);color:var(--danger)}
+.btn:disabled{opacity:.45}
+.btn:active{filter:brightness(1.1)}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.linkbtn{color:var(--accent);font-size:15px;padding:10px 0 10px 12px;min-height:44px;display:inline-flex;align-items:center}
 
-/* ---- sign in / add sheet ----------------------------------- */
-.sheet{
-  position:fixed;inset:0;z-index:60;background:rgba(10,13,16,.86);
-  display:none;align-items:flex-end;
+/* ---- segmented ---- */
+.seg{display:grid;gap:6px}
+.seg.c2{grid-template-columns:1fr 1fr}
+.seg.c4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.seg button{
+  min-height:44px;border-radius:8px;border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font-size:14px;
 }
-.sheet.show{display:flex}
-.sheetinner{
-  width:100%;background:var(--ground);border-top:2px solid var(--brass);
-  padding:22px 18px calc(22px + env(safe-area-inset-bottom));
-  max-height:88vh;overflow:auto;
-}
-.sheetinner h2{
-  font-family:var(--cond);text-transform:uppercase;letter-spacing:.18em;
-  font-size:14px;margin:0 0 4px;color:var(--chalk);font-weight:700;
-}
-.sheetinner p{font-family:var(--mono);font-size:12px;color:var(--ecru-dim);margin:0 0 18px}
-.sheetinner .field{margin-bottom:14px}
-.sheetinner .field input,.sheetinner .field select{width:100%}
-.rowbtns{display:flex;gap:10px;margin-top:6px}
-.rowbtns .btn{flex:1;justify-content:center;display:flex;align-items:center}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.seg.soft button{min-height:40px;border-color:transparent;color:var(--muted)}
+.seg.soft button[aria-pressed="true"]{background:var(--line);border-color:var(--line);color:var(--text);font-weight:600}
 
+/* ---- inputs ---- */
+.input{
+  width:100%;height:44px;padding:0 14px;border-radius:8px;border:1px solid var(--line);
+  background:var(--surface);color:var(--text);font-size:16px;-webkit-appearance:none;appearance:none;
+}
+textarea.input{height:auto;min-height:88px;padding:10px 14px;line-height:1.4;resize:vertical}
+select.input{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:36px}
+.input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type="search"]::-webkit-search-cancel-button{-webkit-appearance:none}
+
+/* ---- item rows ---- */
+.rows{display:flex;flex-direction:column}
+.row{
+  display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--row);
+  width:100%;min-height:52px;color:var(--text);
+}
+.row.tappable:active{background:rgba(255,255,255,.03)}
+.sw{width:36px;height:36px;border-radius:6px;flex:0 0 auto;background:var(--line);overflow:hidden;position:relative}
+.sw img{width:100%;height:100%;object-fit:cover}
+.sw.lg{width:40px;height:40px}
+.sw.sm{width:34px;height:34px}
+.sw.dashed{background:transparent;border:1.5px dashed var(--warn-line)}
+.rowmain{flex:1 1 auto;display:flex;flex-direction:column;gap:2px}
+.rowend{flex:0 0 auto;font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
+.rowend.warn{color:var(--warn)}
+.check{
+  width:26px;height:26px;border-radius:6px;border:1.5px solid var(--line-soft);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;color:var(--on-accent);font-weight:700;font-size:16px;
+}
+.row[aria-checked="true"] .check{background:var(--accent);border-color:var(--accent)}
+.row[aria-checked="true"] .check::after{content:'✓'}
+.row.missing .name{color:var(--warn)}
+.grouphead{padding:16px 0 4px}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.swatches .sw{width:36px;height:36px}
+
+/* ---- 14-day strip ---- */
+.days{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:5px}
+.days button{height:22px;border-radius:4px;background:var(--row);border:1px solid var(--row)}
+.days button.on{background:var(--accent);border-color:var(--accent)}
+.days button.today{border-color:var(--text)}
+.days button.today.on{box-shadow:inset 0 0 0 2px var(--ground)}
+
+/* ---- counters ---- */
+.counters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.counters button{
+  height:52px;border-radius:8px;border:1px solid var(--line);background:var(--surface);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+}
+.counters button b{font-size:16px;font-weight:600}
+.counters button span{font-size:12px;color:var(--muted)}
+.counters button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.counters button[aria-pressed="true"] span{color:var(--on-accent)}
+
+/* ---- nav ---- */
+nav#nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;height:var(--nav-h);
+  background:var(--ground);border-top:1px solid var(--line);
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 20px var(--sab);
+}
+nav#nav a{display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted);min-height:44px}
+nav#nav a[aria-current="page"]{color:var(--accent);font-weight:600}
+
+/* ---- sheets (picker, auth, edit) ---- */
+.sheet{position:fixed;inset:0;z-index:40;background:var(--ground);display:flex;flex-direction:column;overflow:hidden}
+.sheet-head{padding:calc(var(--sat) + 14px) 20px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:12px;flex:0 0 auto}
+.sheet-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 24px}
+.sheet-foot{
+  flex:0 0 auto;background:var(--bar);border-top:1px solid var(--line);
+  padding:12px 20px calc(12px + var(--sab));display:flex;align-items:center;gap:12px;
+}
+.sheet-foot .tally{flex:1;font-size:15px}
+.sheet-foot .tally b{font-weight:600}
+.sheet-foot .btn.primary{min-height:50px;padding:0 28px;border-radius:10px;font-size:16px}
+.photo-preview{display:flex;gap:12px;align-items:stretch}
+.photo-preview img,.photo-preview .ph{width:104px;height:150px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:var(--surface);border:1px dashed var(--line-soft)}
+
+/* ---- item page ---- */
+.carousel{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:0 -20px;padding:0 20px}
+.carousel::-webkit-scrollbar{display:none}
+.slide{width:300px;height:300px;flex:0 0 auto;scroll-snap-align:start;border-radius:12px;overflow:hidden;position:relative;background:var(--surface)}
+.slide img{width:100%;height:100%;object-fit:cover}
+.slide .badges{position:absolute;top:12px;left:12px;display:flex;gap:6px}
+.badge{padding:4px 8px;border-radius:4px;background:var(--ground);color:var(--text);font-family:var(--mono);font-size:10px;letter-spacing:.1em}
+.badge.cover{color:var(--accent)}
+.slide.plate{display:flex;flex-direction:column;justify-content:flex-end;padding:14px;color:rgba(0,0,0,.65);font-family:var(--mono);font-size:12px}
+.dots{display:flex;gap:6px;align-items:center}
+.dots i{width:8px;height:8px;border-radius:4px;background:var(--line-soft)}
+.dots i.on{background:var(--text)}
+.looks{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px}
+.looks::-webkit-scrollbar{display:none}
+.look{width:84px;height:112px;flex:0 0 auto;border-radius:8px;overflow:hidden;background:var(--surface);border:1px solid var(--line);position:relative}
+.look img{width:100%;height:100%;object-fit:cover}
+.look span{position:absolute;left:6px;bottom:6px;font-family:var(--mono);font-size:10px;color:#fff;text-shadow:0 1px 2px #000}
+.field{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:46px;border-bottom:1px solid var(--row);width:100%}
+.field .k{font-size:15px;color:var(--muted);flex:0 0 auto}
+.field.gap .k{color:var(--warn)}
+.field .v{font-size:15px;text-align:right;display:flex;align-items:center;gap:8px;justify-content:flex-end;overflow-wrap:anywhere}
+.field .v .sw{width:18px;height:18px;border-radius:4px}
+.editrow{display:flex;flex-direction:column;gap:10px;padding:10px 0 14px;border-bottom:1px solid var(--row)}
+.editrow .actions{display:flex;gap:8px;justify-content:flex-end}
+.chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.chip{min-height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--line-soft);font-size:13px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.notes{font-size:13px;color:var(--muted);line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* ---- progress ---- */
+.bar{height:6px;border-radius:3px;background:var(--row);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+
+/* ---- day chips ---- */
+.daychips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px}
+.daychips::-webkit-scrollbar{display:none}
+.daychips button{flex:0 0 auto;min-height:40px;padding:0 12px;border-radius:8px;border:1px solid var(--line);font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--muted)}
+.daychips button[aria-pressed="true"]{background:var(--line);color:var(--text)}
+.daychips button.logged::after{content:'';display:inline-block;width:6px;height:6px;border-radius:3px;background:var(--accent);margin-left:6px}
+
+/* ---- messages ---- */
+#fatal{position:fixed;left:0;right:0;top:0;z-index:100;background:var(--danger);color:#fff;padding:calc(var(--sat) + 14px) 20px 14px;font-size:14px;line-height:1.5}
+#fatal .t{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:4px}
+#err{position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + 12px);z-index:60;background:var(--danger);color:#fff;padding:12px 14px;border-radius:10px;font-size:14px;line-height:1.45;display:none;overflow-wrap:anywhere}
+#err.show{display:block}
 #toast{
-  position:fixed;left:50%;transform:translateX(-50%);
-  bottom:calc(96px + env(safe-area-inset-bottom));z-index:80;
-  background:var(--ecru);color:var(--ground);
-  font-family:var(--mono);font-size:12px;padding:10px 16px;
-  opacity:0;pointer-events:none;transition:opacity .2s ease;
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 16px);z-index:80;
+  background:var(--text);color:var(--ground);font-size:14px;font-weight:500;padding:10px 16px;border-radius:8px;
+  opacity:0;pointer-events:none;transition:opacity .2s ease;max-width:calc(100vw - 40px);text-align:center;
 }
 #toast.show{opacity:1}
-
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.loading{padding:60px 0;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+.empty{padding:20px 0;color:var(--muted);font-size:14px}
+.hint{font-size:14px;color:var(--muted);line-height:1.4}
+.warnrow{display:flex;align-items:center;gap:12px;padding:8px 0}
+.warnrow .txt{font-size:15px;color:var(--warn)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
 
 <!-- ============================================================
-     CONFIGURE ME — two lines, then this file is done.
-     The publishable (anon) key is safe in a public repo: RLS
-     grants access only to authenticated sessions.
-     Supabase dashboard -> Project Settings -> API Keys
+     CONFIG. The publishable key is safe in a public repo:
+     RLS grants access only to authenticated sessions.
      ============================================================ -->
 <script>
   window.WARDROBE_CONFIG = {
     url: 'https://sobshyactzxhtsayemkj.supabase.co',
     key: 'sb_publishable_bEjEjiIRdyYKxynJmw_OiQ_NU-8h4Gq'
   };
+  // Boot watchdog: a failed ESM import kills a module silently, so a
+  // classic script owns the "did the app start?" question.
+  window.__wardrobe = { booted:false };
+  window.showFatal = function(title, msg){
+    var b = document.getElementById('fatal');
+    if (!b) return;
+    b.querySelector('.t').textContent = title;
+    b.querySelector('.m').textContent = msg || '';
+    b.hidden = false;
+  };
+  window.addEventListener('error', function(e){ if (!window.__wardrobe.booted) window.showFatal('The app failed to start', e.message || String(e.error||e)); });
+  window.addEventListener('unhandledrejection', function(e){ var r=e.reason; window.showFatal(window.__wardrobe.booted ? 'Something went wrong' : 'The app failed to start', (r && r.message) || String(r)); });
+  setTimeout(function(){ if (!window.__wardrobe.booted) window.showFatal('The app code did not load', 'Could not reach esm.sh for supabase-js within 12 s. Check the connection and reload.'); }, 12000);
 </script>
 
-<header>
-  <div class="brandrow">
-    <h1>Wardrobe</h1>
-    <span class="stamp" id="backlog">—</span>
-  </div>
-  <div id="freshness"><span class="dot dead"></span>Connecting…</div>
-</header>
-
+<div id="fatal" role="alert" hidden><span class="t"></span><span class="m"></span></div>
+<main id="view"><div class="loading">Loading</div></main>
+<nav id="nav" aria-label="Sections">
+  <a href="#/today" data-tab="today">Today</a>
+  <a href="#/trip" data-tab="trip">Trip</a>
+  <a href="#/closet" data-tab="closet">Closet</a>
+</nav>
+<div id="layer"></div>
 <div id="err" role="alert"></div>
-
-<div class="controls">
-  <div class="field">
-    <label class="lbl" for="worn">Worn on</label>
-    <input type="date" id="worn">
-  </div>
-  <div class="field">
-    <label class="lbl" for="slot">Slot</label>
-    <select id="slot">
-      <option value="primary">Primary</option>
-      <option value="evening">Evening</option>
-      <option value="gym">Gym</option>
-      <option value="bed">Bed</option>
-      <option value="travel">Travel</option>
-    </select>
-  </div>
-  <button class="btn ghost" id="repeat" style="height:40px">Repeat last</button>
-</div>
-
-<main id="closet"></main>
-
-<div id="bar">
-  <div id="tally"><b>0</b> selected</div>
-  <button class="btn ghost" id="addbtn">+ Item</button>
-  <button class="btn" id="save" disabled>Save</button>
-</div>
-
-<!-- sign in -->
-<div class="sheet" id="authsheet">
-  <div class="sheetinner">
-    <h2>Sign in</h2>
-    <p>Your wardrobe is locked to your account. One sign-in per device.</p>
-    <div class="field"><label class="lbl" for="email">Email</label><input type="email" id="email" autocomplete="username"></div>
-    <div class="field"><label class="lbl" for="pw">Password</label><input type="password" id="pw" autocomplete="current-password"></div>
-    <div class="rowbtns"><button class="btn" id="signin">Sign in</button></div>
-  </div>
-</div>
-
-<!-- add item -->
-<div class="sheet" id="addsheet">
-  <div class="sheetinner">
-    <h2>Add an item</h2>
-    <p>Name it now, price it later. It lands in the backlog until a receipt turns up.</p>
-    <div class="field"><label class="lbl" for="nname">Name</label><input type="text" id="nname" placeholder="Sebago boat shoes, blue"></div>
-    <div class="field"><label class="lbl" for="nlayer">Layer</label>
-      <select id="nlayer">
-        <option value="shirt">Shirt</option><option value="pants">Pants</option>
-        <option value="outer">Outer</option><option value="shoes">Shoes</option>
-        <option value="accessory">Accessory</option><option value="other">Other</option>
-      </select>
-    </div>
-    <div class="field"><label class="lbl" for="ncat">Category</label><select id="ncat"></select></div>
-    <div class="field"><label class="lbl" for="nclass">Class</label>
-      <select id="nclass">
-        <option value="wardrobe">Wardrobe — counts toward cost per wear</option>
-        <option value="property">Property — logged, not measured</option>
-        <option value="collectible">Collectible — provenance only</option>
-      </select>
-    </div>
-    <div class="rowbtns">
-      <button class="btn ghost" id="addcancel">Cancel</button>
-      <button class="btn" id="addsave">Add</button>
-    </div>
-  </div>
-</div>
-
-<div id="toast"></div>
+<div id="toast" role="status"></div>
+<input type="file" id="filepick" accept="image/*" hidden>
 
 <script type="module">
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const CFG = window.WARDROBE_CONFIG;
-const $ = s => document.querySelector(s);
-
 /* ------------------------------------------------------------
-   Failure is loud. There is no placeholder data in this file,
-   deliberately — an empty screen means an empty database, and
-   a red banner means a broken query. Those must never look alike.
+   One init path: main() → client → session → start() → render.
    ------------------------------------------------------------ */
-function fail(where, e){
-  const box = $('#err');
-  box.innerHTML = '<span class="lbl">Could not ' + where + '</span>' +
-                  (e && e.message ? e.message : String(e));
-  box.classList.add('show');
-  console.error(where, e);
-}
-function clearErr(){ $('#err').classList.remove('show'); }
-function toast(msg){
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2200);
-}
+const CFG = window.WARDROBE_CONFIG;
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-if (!CFG.key || CFG.key.startsWith('PASTE_')){
-  fail('start', {message:'No Supabase key set. Open index.html and put your publishable key in WARDROBE_CONFIG at the top of the file.'});
-  throw new Error('unconfigured');
+let createClient;
+try {
+  ({ createClient } = await import('https://esm.sh/@supabase/supabase-js@2'));
+} catch (e) {
+  window.showFatal('The app code did not load', 'esm.sh is unreachable: ' + (e && e.message ? e.message : e));
+  throw e;
 }
+window.__wardrobe.booted = true;
+$('#fatal').hidden = true;
 
 const sb = createClient(CFG.url, CFG.key);
+const BUCKET = 'item-photos';
 
-const LAYERS = [
-  ['outer','Outer'],['shirt','Shirt'],['pants','Pants'],
-  ['shoes','Shoes'],['accessory','Accessory'],['other','Other']
-];
-const state = { items: [], picked: new Set(), cats: [] };
+/* ------------------------------------------------------------
+   State
+   ------------------------------------------------------------ */
+const state = {
+  ready:false, cats:[], catById:new Map(), items:[], itemById:new Map(),
+  outfits:[], trips:[], wear:new Map(),
+  closetFilter:null, closetQuery:'', tripTab:'days', tripDay:null,
+  photoCache:new Map(),
+};
 
-/* ---------- inventory tag: the physical/digital handle -------- */
+/* ------------------------------------------------------------
+   Small helpers
+   ------------------------------------------------------------ */
+const pad = (n, w=2) => String(n).padStart(w, '0');
+function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y, m-1, d); }
+function addDays(iso, n){ const d=parseISO(iso); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function daysBetween(a, b){ return Math.round((parseISO(b)-parseISO(a))/86400000); }
+const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], WDL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtLabel(iso){ const d=parseISO(iso); return `${WD[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`.toUpperCase(); }
+function fmtLong(iso){ const d=parseISO(iso); return `${WDL[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`; }
+function fmtShort(iso){ const d=parseISO(iso); return `${WD[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]}`; }
+function relDay(iso){ const t=todayISO(); if (iso===t) return 'today'; if (iso===addDays(t,-1)) return 'yesterday'; return fmtShort(iso); }
+const SLOT = { primary:'Day', evening:'Evening', gym:'Gym', bed:'Bed', travel:'Travel' };
+const PICK_SLOTS = ['primary','evening','gym','travel'];
+const FORMALITY = {1:'lounge',2:'casual',3:'smart casual',4:'cocktail',5:'suit & tie'};
+const LOCATIONS = ['Coat rack','Dresser','Closet','Cedar chest','Bureau','Storage unit'];
+const SEASONS = ['spring','summer','fall','winter'];
 const PREFIX = { wardrobe:'WD', collectible:'CL', property:'PR' };
-const tagFor = it => (PREFIX[it.item_class]||'WD') + '-' + String(it.id).padStart(3,'0');
+const tagFor = it => (PREFIX[it.item_class]||'WD') + '-' + pad(it.id,3);
+const cap = s => s ? s[0].toUpperCase()+s.slice(1) : '';
 
-/* ---------- auth ---------------------------------------------- */
-async function boot(){
-  const { data:{ session } } = await sb.auth.getSession();
-  if (!session){ $('#authsheet').classList.add('show'); return; }
-  $('#authsheet').classList.remove('show');
-  await Promise.all([loadCats(), loadItems()]);
-  await freshness();
-}
-$('#signin').onclick = async () => {
-  clearErr();
-  const { error } = await sb.auth.signInWithPassword({
-    email: $('#email').value.trim(), password: $('#pw').value
-  });
-  if (error) return fail('sign in', error);
-  boot();
-};
-
-/* ---------- load ---------------------------------------------- */
-async function loadCats(){
-  const { data, error } = await sb.from('categories')
-    .select('id,name,default_layer').order('sort_order');
-  if (error) return fail('load categories', error);
-  state.cats = data || [];
-  $('#ncat').innerHTML = state.cats
-    .map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'), 2200); }
+function fail(where, e){
+  const box=$('#err'); box.textContent = `Could not ${where}: ${(e && e.message) || e}`; box.classList.add('show');
+  console.error(where, e); clearTimeout(fail._t); fail._t=setTimeout(()=>box.classList.remove('show'), 8000);
 }
 
-async function loadItems(){
-  const { data, error } = await sb.from('items')
-    .select('id,name,item_class,layer,brand,unit_price,price_source,status')
-    .eq('status','active')
-    .order('layer').order('name');
-  if (error) return fail('load your closet', error);
-  state.items = data || [];
-  render();
-  backlogCount();
+/* ---- prices: never show an estimate without the ~ ---- */
+function priceText(it){
+  if (it.unit_price == null) return 'no price';
+  const n = Number(it.unit_price);
+  const s = '$' + (Number.isInteger(n) ? n : n.toFixed(2));
+  return it.price_source === 'estimate' ? '~' + s : s;
 }
 
-/* ---------- render -------------------------------------------- */
-function render(){
-  const root = $('#closet');
-  if (!state.items.length){
-    root.innerHTML = `<div class="notice">
-      <b>Nothing in the closet yet.</b><br>
-      The database is reachable and it is empty — that is a real answer,
-      not a failure. Tap <b>+ Item</b> to add the first thing you're wearing.
-    </div>`;
-    return;
+/* ---- categories / groups ---- */
+const GROUPS = [['jackets','Jackets & Coats'],['shirts','Shirts & Tops'],['knit','Knitwear'],['pants','Pants'],['shoes','Shoes'],['acc','Accessories'],['other','Other']];
+const GROUP_LABEL = Object.fromEntries(GROUPS);
+function catOf(it){ return state.catById.get(it.category_id); }
+function parentCat(it){ const c=catOf(it); if (!c) return null; return c.parent_id ? state.catById.get(c.parent_id) : c; }
+function layerOf(it){ return it.layer || catOf(it)?.default_layer || 'other'; }
+function groupOf(it){
+  const p = parentCat(it)?.name;
+  switch (p){
+    case 'Outerwear': case 'Tailoring': return 'jackets';
+    case 'Tops': return 'shirts';
+    case 'Knitwear': return 'knit';
+    case 'Bottoms': return 'pants';
+    case 'Shoes': return 'shoes';
+    case 'Accessories': return 'acc';
   }
-  root.innerHTML = LAYERS.map(([key,label])=>{
-    const rows = state.items.filter(i => (i.layer||'other') === key);
-    if (!rows.length) return '';
-    return `<section class="layer">
-      <div class="layerhead"><span class="lbl">${label}</span><span class="rule"></span>
-        <span class="lbl">${rows.length}</span></div>
-      ${rows.map(itemRow).join('')}
-    </section>`;
-  }).join('');
+  return {outer:'jackets', shirt:'shirts', pants:'pants', shoes:'shoes', accessory:'acc'}[layerOf(it)] || 'other';
+}
+function grouped(items){
+  const m = new Map(GROUPS.map(([k])=>[k,[]]));
+  for (const it of items) m.get(groupOf(it)).push(it);
+  return GROUPS.filter(([k])=>m.get(k).length).map(([k,label])=>({key:k,label,items:m.get(k)}));
+}
 
-  root.querySelectorAll('.item').forEach(el=>{
-    el.onclick = () => {
-      const id = Number(el.dataset.id);
-      state.picked.has(id) ? state.picked.delete(id) : state.picked.add(id);
-      el.setAttribute('aria-pressed', state.picked.has(id));
-      tally();
-    };
+/* ---- wear stats: derived from outfits, never stored ---- */
+function rebuildWear(){
+  state.wear = new Map();
+  for (const o of state.outfits){
+    for (const id of o.items){
+      const w = state.wear.get(id) || {n:0,last:null};
+      w.n++; if (!w.last || o.worn_on > w.last) w.last = o.worn_on;
+      state.wear.set(id, w);
+    }
+  }
+}
+const wearOf = id => state.wear.get(id) || {n:0,last:null};
+function outfitFor(date, slot){ return state.outfits.find(o => o.worn_on===date && o.slot===slot) || null; }
+function outfitsOn(date){ return state.outfits.filter(o => o.worn_on===date); }
+
+/* ---- storage paths ---- */
+const stripBucket = p => p ? String(p).replace(/^item-photos\//,'') : p;
+const publicUrl = p => p ? sb.storage.from(BUCKET).getPublicUrl(stripBucket(p)).data.publicUrl : null;
+function photoPrefix(it){ return `${(PREFIX[it.item_class]||'WD').toLowerCase()}-${pad(it.id,3)}-`; }
+function kindOfPhoto(name, it){
+  const m = name.match(/-(own|retail|label)(?:-[\w]+)?\.\w+$/i);
+  if (m) return m[1].toUpperCase();
+  return it && it.photo_source === 'retailer' ? 'RETAIL' : 'OWN';
+}
+function slug(s){ return String(s||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32) || 'item'; }
+function stamp(){ const d=new Date(); return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}t${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; }
+
+/* ---- trips ---- */
+function currentTrip(){
+  const t = todayISO();
+  const inRange = state.trips.find(tr => tr.start_date && tr.end_date && tr.start_date <= t && t <= tr.end_date);
+  if (inRange) return inRange;
+  const upcoming = state.trips.filter(tr => tr.start_date && tr.start_date > t).sort((a,b)=>a.start_date.localeCompare(b.start_date));
+  return upcoming[0] || null;
+}
+function tripForDate(date){ return state.trips.find(tr => tr.start_date && tr.end_date && tr.start_date <= date && date <= tr.end_date) || null; }
+function tripShort(tr){ return String(tr.name||'Trip').split(/\s[—–-]\s/)[0].toUpperCase(); }
+function occasionFor(tr, date, slot){ return tr.trip_occasions.find(o => o.occasion_date===date && o.slot===slot) || null; }
+
+/* required layers for a planned outfit */
+function missingLayers(itemIds){
+  const its = itemIds.map(id=>state.itemById.get(id)).filter(Boolean);
+  const has = k => its.some(i => layerOf(i)===k);
+  const hasTop = has('shirt') || its.some(i => groupOf(i)==='knit');
+  const out = [];
+  if (!hasTop) out.push('No top planned');
+  if (!has('pants')) out.push('No trousers planned');
+  if (!has('shoes')) out.push('No shoes planned');
+  return out;
+}
+/* planner rules for suggestions while planning */
+function planAllowed(it, occ){
+  if (it.location === 'Storage unit') return false;
+  if (occ?.excluded_category_ids?.length && it.category_id && occ.excluded_category_ids.map(Number).includes(Number(it.category_id))) return false;
+  if (occ?.formality_min != null && it.formality != null && it.formality < occ.formality_min - 1) return false;
+  return true;
+}
+function anchorWarning(itemIds, occ){
+  if (!occ || occ.formality_min == null) return '';
+  const its = itemIds.map(id=>state.itemById.get(id)).filter(Boolean);
+  const anchors = its.filter(i => ['jackets','pants','shoes'].includes(groupOf(i)));
+  if (!anchors.length) return '';
+  return anchors.some(i => (i.formality||0) >= occ.formality_min) ? '' : `No anchor piece at formality ${occ.formality_min}+`;
+}
+
+/* ------------------------------------------------------------
+   Data
+   ------------------------------------------------------------ */
+const ITEM_COLS = 'id,name,brand,item_class,category_id,layer,size,unit_price,price_source,purchase_date,retailer,formality,weight,season_tags,colors,swatch_hex,swatch_source,location,photo_ref,photo_source,status,notes,team_id,quantity';
+
+async function loadAll(){
+  const [cats, items, outfits, trips] = await Promise.all([
+    sb.from('categories').select('id,name,parent_id,default_layer,sort_order').order('sort_order'),
+    sb.from('items').select(ITEM_COLS).not('status','in','(donated,sold,lost)').order('name'),
+    sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,occasion,notes,outfit_items(item_id)').order('worn_on',{ascending:false}).limit(1000),
+    sb.from('trips').select('id,name,start_date,end_date,destination,notes,trip_occasions(id,occasion_date,slot,name,dress_code,formality_min,formality_max,excluded_category_ids,notes,occasion_items(item_id,role))').order('start_date'),
+  ]);
+  for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips']]) if (r.error) throw new Error(`${what}: ${r.error.message}`);
+  state.cats = cats.data; state.catById = new Map(cats.data.map(c=>[c.id,c]));
+  setItems(items.data);
+  setOutfits(outfits.data);
+  state.trips = trips.data.map(t => ({...t, trip_occasions:(t.trip_occasions||[]).sort((a,b)=>a.occasion_date.localeCompare(b.occasion_date) || slotOrder(a.slot)-slotOrder(b.slot))}));
+}
+function slotOrder(s){ return ['travel','primary','gym','evening','bed'].indexOf(s); }
+function setItems(rows){ state.items = rows; state.itemById = new Map(rows.map(i=>[i.id,i])); }
+function setOutfits(rows){
+  state.outfits = rows.map(o => ({...o, items:(o.outfit_items||[]).map(r=>r.item_id)})).sort((a,b)=>b.worn_on.localeCompare(a.worn_on) || slotOrder(a.slot)-slotOrder(b.slot));
+  rebuildWear();
+}
+async function reloadOutfits(){
+  const { data, error } = await sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,occasion,notes,outfit_items(item_id)').order('worn_on',{ascending:false}).limit(1000);
+  if (error) throw error; setOutfits(data);
+}
+async function reloadTrips(){
+  const { data, error } = await sb.from('trips').select('id,name,start_date,end_date,destination,notes,trip_occasions(id,occasion_date,slot,name,dress_code,formality_min,formality_max,excluded_category_ids,notes,occasion_items(item_id,role))').order('start_date');
+  if (error) throw error;
+  state.trips = data.map(t => ({...t, trip_occasions:(t.trip_occasions||[]).sort((a,b)=>a.occasion_date.localeCompare(b.occasion_date) || slotOrder(a.slot)-slotOrder(b.slot))}));
+}
+/* Always fetch the live outfit for a date/slot before editing or saving. */
+async function fetchOutfit(date, slot){
+  const { data, error } = await sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,outfit_items(item_id)').eq('worn_on',date).eq('slot',slot).maybeSingle();
+  if (error) throw error;
+  return data ? {...data, items:(data.outfit_items||[]).map(r=>r.item_id)} : null;
+}
+/* Save = replace the outfit's item list. Never called with an empty list. */
+async function saveOutfit({date, slot, itemIds, tripId, photoPath}){
+  if (!itemIds.length) throw new Error('nothing selected');
+  const existing = await fetchOutfit(date, slot);
+  let id;
+  if (existing){
+    id = existing.id;
+    const patch = {};
+    if (tripId && !existing.trip_id) patch.trip_id = tripId;
+    if (photoPath) patch.photo_ref = photoPath;
+    if (Object.keys(patch).length){ const { error } = await sb.from('outfits').update(patch).eq('id', id); if (error) throw error; }
+  } else {
+    const row = { worn_on:date, slot, source:'app' };
+    if (tripId) row.trip_id = tripId;
+    if (photoPath) row.photo_ref = photoPath;
+    const { data, error } = await sb.from('outfits').insert(row).select('id').single();
+    if (error) throw error; id = data.id;
+  }
+  const del = await sb.from('outfit_items').delete().eq('outfit_id', id); if (del.error) throw del.error;
+  const ins = await sb.from('outfit_items').insert(itemIds.map(item_id => ({outfit_id:id, item_id}))); if (ins.error) throw ins.error;
+  await reloadOutfits();
+  return id;
+}
+async function savePlan(occasionId, itemIds){
+  const del = await sb.from('occasion_items').delete().eq('occasion_id', occasionId); if (del.error) throw del.error;
+  if (itemIds.length){ const ins = await sb.from('occasion_items').insert(itemIds.map(item_id => ({occasion_id:occasionId, item_id}))); if (ins.error) throw ins.error; }
+  await reloadTrips();
+}
+async function updateItem(id, patch){
+  const { data, error } = await sb.from('items').update(patch).eq('id', id).select(ITEM_COLS).single();
+  if (error) throw error;
+  setItems(state.items.map(i => i.id===id ? data : i));
+  return data;
+}
+async function listItemPhotos(it){
+  const prefix = photoPrefix(it);
+  const { data, error } = await sb.storage.from(BUCKET).list('', { limit:200, search:prefix, sortBy:{column:'name',order:'asc'} });
+  if (error) throw error;
+  const files = (data||[]).filter(f => f.name.startsWith(prefix) && !f.name.endsWith('/')).map(f => f.name);
+  // legacy cover not matching the prefix (e.g. bucket-prefixed photo_ref) still counts if it exists
+  const cover = stripBucket(it.photo_ref);
+  if (cover && !files.includes(cover)){
+    const { data: probe } = await sb.storage.from(BUCKET).list('', { limit:1, search:cover });
+    if (probe && probe.some(f=>f.name===cover)) files.unshift(cover);
+  }
+  return files;
+}
+
+/* ---- the recognition seam: returns suggested item ids from a selfie.
+   Not built yet (needs an Anthropic key in an Edge Function). Must never
+   suggest items it cannot see; today it sees nothing. ---- */
+async function suggestItemsFromPhoto(/* blob, items */){
+  return { visible:[], possible:[] }; // possible: [{id, reason}]
+}
+
+/* ------------------------------------------------------------
+   Images: resize to JPEG, sample a swatch
+   ------------------------------------------------------------ */
+function loadImageEl(src, cors){
+  return new Promise((res, rej) => { const im = new Image(); if (cors) im.crossOrigin = 'anonymous'; im.onload = ()=>res(im); im.onerror = ()=>rej(new Error('image failed to load')); im.src = src; });
+}
+async function processFile(file, maxSide=1600){
+  const url = URL.createObjectURL(file);
+  try {
+    const im = await loadImageEl(url);
+    const scale = Math.min(1, maxSide / Math.max(im.naturalWidth, im.naturalHeight));
+    const w = Math.max(1, Math.round(im.naturalWidth*scale)), h = Math.max(1, Math.round(im.naturalHeight*scale));
+    const c = document.createElement('canvas'); c.width=w; c.height=h;
+    c.getContext('2d').drawImage(im, 0, 0, w, h);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
+    if (!blob) throw new Error('could not encode image');
+    return { blob, hex: dominantHex(im) };
+  } finally { URL.revokeObjectURL(url); }
+}
+/* Dominant colour of the central region, ignoring near-white and near-black
+   background pixels. Falls back to a plain average if everything was skipped. */
+function dominantHex(im){
+  const N = 48, c = document.createElement('canvas'); c.width=N; c.height=N;
+  const ctx = c.getContext('2d', {willReadFrequently:true});
+  const W = im.naturalWidth||im.width, H = im.naturalHeight||im.height;
+  const sx = W*0.15, sy = H*0.15, sw = W*0.7, sh = H*0.7;
+  ctx.drawImage(im, sx, sy, sw, sh, 0, 0, N, N);
+  const px = ctx.getImageData(0,0,N,N).data;
+  const buckets = new Map(); let fr=0,fg=0,fb=0,fn=0;
+  for (let i=0;i<px.length;i+=4){
+    const r=px[i],g=px[i+1],b=px[i+2],a=px[i+3]; if (a<128) continue;
+    fr+=r; fg+=g; fb+=b; fn++;
+    const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+    if (mx>238 && mn>222) continue;   // near-white
+    if (mx<30) continue;              // near-black
+    const key = ((r>>4)<<8)|((g>>4)<<4)|(b>>4);
+    const k = buckets.get(key) || {r:0,g:0,b:0,n:0}; k.r+=r;k.g+=g;k.b+=b;k.n++; buckets.set(key,k);
+  }
+  let best=null; for (const k of buckets.values()) if (!best || k.n>best.n) best=k;
+  if (!best){ if (!fn) return null; best={r:fr,g:fg,b:fb,n:fn}; }
+  const hx = v => pad(Math.round(v).toString(16).toUpperCase(),2);
+  return '#' + hx(best.r/best.n) + hx(best.g/best.n) + hx(best.b/best.n);
+}
+async function sampleFromUrl(url){ const im = await loadImageEl(url + (url.includes('?')?'&':'?') + 'v=' + Date.now(), true); return dominantHex(im); }
+async function uploadBlob(path, blob, upsert=false){
+  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert, cacheControl:'3600' });
+  if (error) throw error; return path;
+}
+function pickFile(){
+  return new Promise(res => {
+    const inp = $('#filepick'); inp.value = '';
+    inp.onchange = () => res(inp.files && inp.files[0] ? inp.files[0] : null);
+    inp.click();
   });
-  tally();
 }
 
-function itemRow(i){
-  const verified = i.price_source === 'receipt';
-  const price = i.unit_price != null
-      ? '$' + Number(i.unit_price).toFixed(2)
-      : 'no price';
-  const meta = [i.brand, verified ? price : `<span class="unverified">${price} · unverified</span>`]
-      .filter(Boolean).join(' · ');
-  return `<button class="item" data-id="${i.id}"
-            aria-pressed="${state.picked.has(i.id)}">
-      <span class="tag">${tagFor(i)}</span>
-      <span class="itemmain">
-        <span class="itemname">${escapeHtml(i.name)}</span>
-        <span class="itemmeta">${meta}</span>
-      </span>
-      <span class="check">✕</span>
-    </button>`;
+/* ------------------------------------------------------------
+   Rendering primitives
+   ------------------------------------------------------------ */
+function swatchHTML(it, cls=''){
+  const bg = it.swatch_hex || '#3A3F46';
+  const url = it.photo_ref ? publicUrl(it.photo_ref) : null;
+  return `<span class="sw ${cls}" style="background:${esc(bg)}">${url ? `<img src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>`;
 }
-const escapeHtml = s => String(s).replace(/[&<>"]/g, c =>
-  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function itemRowHTML(it, {end='', check=null, href=null, cls=''}={}){
+  const inner = `${swatchHTML(it)}<span class="rowmain"><span class="name">${esc(it.name)}</span>${it.brand?`<span class="brand">${esc(it.brand)}</span>`:''}</span>${end?`<span class="rowend ${end.cls||''}">${esc(end.text||end)}</span>`:''}${check!==null?'<span class="check"></span>':''}`;
+  if (href) return `<a class="row tappable ${cls}" href="${esc(href)}">${inner}</a>`;
+  if (check!==null) return `<button type="button" class="row tappable ${cls}" role="checkbox" aria-checked="${check?'true':'false'}" data-id="${it.id}">${inner}</button>`;
+  return `<div class="row ${cls}">${inner}</div>`;
+}
+function setNav(tab){ $$('#nav a').forEach(a => a.toggleAttribute('aria-current', false)); const a=$(`#nav a[data-tab="${tab}"]`); if (a) a.setAttribute('aria-current','page'); }
 
-function tally(){
-  $('#tally').innerHTML = `<b>${state.picked.size}</b> selected`;
-  $('#save').disabled = state.picked.size === 0;
+/* ------------------------------------------------------------
+   Router
+   ------------------------------------------------------------ */
+function route(){
+  const h = location.hash.replace(/^#\/?/, '') || 'today';
+  const [path, qs] = h.split('?');
+  const seg = path.split('/');
+  return { seg, q:new URLSearchParams(qs||'') };
 }
+function go(hash){ location.hash = hash; }
+window.addEventListener('hashchange', render);
 
-/* ---------- freshness: three separate facts ------------------- */
-async function freshness(){
-  try{
-    const [itemsHead, outfitsHead, lastItem, lastOutfit] = await Promise.all([
-      sb.from('items').select('*',{count:'exact',head:true}),
-      sb.from('outfits').select('*',{count:'exact',head:true}),
-      sb.from('items').select('created_at').order('created_at',{ascending:false}).limit(1),
-      sb.from('outfits').select('created_at').order('created_at',{ascending:false}).limit(1)
-    ]);
-    const stamps = [lastItem.data?.[0]?.created_at, lastOutfit.data?.[0]?.created_at]
-      .filter(Boolean).map(s=>new Date(s));
-    const last = stamps.length ? new Date(Math.max(...stamps)) : null;
-    const age = last ? (Date.now()-last)/86400000 : Infinity;
-    const cls = age < 2 ? '' : age < 14 ? 'stale' : 'dead';
-    $('#freshness').innerHTML =
-      `<span class="dot ${cls}"></span>` +
-      `<span>Last change <b>${last ? ago(last) : 'never'}</b></span>` +
-      `<span><b>${itemsHead.count ?? 0}</b> items</span>` +
-      `<span><b>${outfitsHead.count ?? 0}</b> outfits</span>`;
-  }catch(e){ fail('check freshness', e); }
-}
-function ago(d){
-  const m = Math.floor((Date.now()-d)/60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return m + 'm ago';
-  if (m < 1440) return Math.floor(m/60) + 'h ago';
-  return Math.floor(m/1440) + 'd ago';
+function render(){
+  if (!state.ready) return;
+  const { seg } = route();
+  const view = $('#view');
+  window.scrollTo(0,0);
+  try {
+    switch (seg[0]){
+      case 'today': setNav('today'); view.innerHTML = dayHTML(todayISO()); bindDay(todayISO()); break;
+      case 'day': setNav('today'); view.innerHTML = dayHTML(seg[1]||todayISO()); bindDay(seg[1]||todayISO()); break;
+      case 'trip': setNav('trip'); view.innerHTML = tripHTML(); bindTrip(); break;
+      case 'closet': setNav('closet'); view.innerHTML = closetHTML(); bindCloset(); break;
+      case 'item': setNav('closet'); renderItem(Number(seg[1])); break;
+      default: go('#/today');
+    }
+  } catch (e) { fail('draw this screen', e); }
 }
 
-async function backlogCount(){
-  const { count, error } = await sb.from('items')
-    .select('*',{count:'exact',head:true})
-    .or('price_source.is.null,price_source.neq.receipt');
-  if (error) return;
-  $('#backlog').textContent = (count ?? 0) + ' to price';
+/* ------------------------------------------------------------
+   TODAY / a day
+   ------------------------------------------------------------ */
+function dayHTML(date){
+  const isToday = date === todayISO();
+  const logged = outfitsOn(date);
+  const parts = [];
+  parts.push(`<div class="stack tight"><div class="lbl">${isToday ? 'TODAY · ' : ''}${fmtLabel(date)}</div>`);
+  if (!logged.length){
+    parts.push(`<h1>Not logged${isToday?' yet':''}</h1></div>`);
+    parts.push(`<button class="btn primary big" id="logbtn">Log what I'm wearing</button>`);
+    parts.push(`<button class="btn" id="selfiebtn">Log from a selfie</button>`);
+    const prev = state.outfits.find(o => o.slot==='primary' && o.worn_on < date && o.items.length);
+    if (prev){
+      const its = prev.items.map(id=>state.itemById.get(id)).filter(Boolean);
+      const names = its.slice(0,5).map(i=>shortName(i)).join(', ') + (its.length>5 ? `, +${its.length-5}` : '');
+      const when = prev.worn_on===addDays(date,-1) ? 'yesterday' : relDay(prev.worn_on);
+      parts.push(`<div class="card">
+        <div class="between"><div style="font-weight:500">Same as ${esc(when)}?</div><div class="mono">${esc(fmtLabel(prev.worn_on).split(' ')[0])} · ${its.length} ITEMS</div></div>
+        <div class="swatches">${its.map(i=>swatchHTML(i)).join('')}</div>
+        <div class="small muted">${esc(names)}</div>
+        <button class="btn outline" id="wearagain" data-outfit="${prev.id}">Wear again</button>
+      </div>`);
+    }
+  } else {
+    const total = logged.reduce((n,o)=>n+o.items.length,0);
+    parts.push(`<div class="between"><h1>Logged · ${total} item${total===1?'':'s'}</h1></div></div>`);
+    for (const o of logged){
+      const its = o.items.map(id=>state.itemById.get(id)).filter(Boolean);
+      const photo = o.photo_ref ? publicUrl(o.photo_ref) : null;
+      parts.push(`<section class="stack tight">
+        <div class="between"><span class="lbl ${o.slot==='primary'?'':'accent'}">${esc(SLOT[o.slot]||o.slot)}${o.trip_id?' · TRIP':''}</span><button class="linkbtn" data-edit="${o.id}" data-date="${o.worn_on}" data-slot="${o.slot}">Edit</button></div>
+        ${photo ? `<a href="${esc(photo)}" target="_blank" rel="noopener" style="display:flex;gap:12px;align-items:center;color:inherit"><img src="${esc(photo)}" alt="Outfit photo" style="width:96px;height:128px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><span class="small muted">Outfit photo. It shows in the Looks strip of each item.</span></a>` : ''}
+        <div class="rows">${its.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`})).join('')}</div>
+      </section>`);
+    }
+    const next = PICK_SLOTS.find(s => !logged.some(o=>o.slot===s) && s!=='primary') || null;
+    if (next) parts.push(`<button class="btn dashed" id="addslot" data-slot="${next}">+ Add ${next==='evening'?'an evening':'a '+next} outfit</button>`);
+  }
+  // 14-day strip
+  const days = Array.from({length:14},(_,i)=>addDays(todayISO(), i-13));
+  const nLogged = days.filter(d => outfitsOn(d).length).length;
+  parts.push(`<div class="stack tight" style="gap:10px">
+    <div class="between"><span class="lbl">Last 14 days</span><span class="mono">${nLogged} LOGGED</span></div>
+    <div class="days">${days.map(d=>`<button type="button" data-day="${d}" class="${outfitsOn(d).length?'on':''} ${d===todayISO()?'today':''} ${d===date&&!isToday?'today':''}" aria-label="${esc(fmtShort(d))}"></button>`).join('')}</div>
+  </div>`);
+  if (!isToday) parts.push(`<a class="linkbtn" href="#/today" style="padding-left:0">‹ Back to today</a>`);
+  return `<div class="stack">${parts.join('')}</div>`;
+}
+function shortName(it){ return String(it.name).split(/\s[—–]\s/)[0]; }
+function bindDay(date){
+  $('#logbtn')?.addEventListener('click', ()=>openPicker({date, slot:'primary'}));
+  $('#selfiebtn')?.addEventListener('click', ()=>logFromSelfie(date));
+  $('#addslot')?.addEventListener('click', e=>openPicker({date, slot:e.currentTarget.dataset.slot}));
+  $$('[data-edit]').forEach(b => b.addEventListener('click', ()=>openPicker({date:b.dataset.date, slot:b.dataset.slot})));
+  $$('.days button').forEach(b => b.addEventListener('click', ()=>go(b.dataset.day===todayISO()?'#/today':`#/day/${b.dataset.day}`)));
+  $('#wearagain')?.addEventListener('click', async e => {
+    const btn=e.currentTarget; const prev = state.outfits.find(o=>o.id===Number(btn.dataset.outfit)); if (!prev) return;
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      await saveOutfit({date, slot:'primary', itemIds:prev.items, tripId:tripForDate(date)?.id});
+      toast(`Logged ${prev.items.length} items`); render();
+    } catch(err){ fail('save the outfit', err); btn.disabled=false; btn.textContent='Wear again'; }
+  });
+}
+async function logFromSelfie(date){
+  const file = await pickFile(); if (!file) return;
+  toast('Preparing photo…');
+  try {
+    const { blob } = await processFile(file, 1600);
+    const url = URL.createObjectURL(blob);
+    const sugg = await suggestItemsFromPhoto(blob, state.items);
+    openPicker({date, slot:'primary', photo:{blob,url}, suggested:sugg});
+  } catch(e){ fail('read that photo', e); }
 }
 
-/* ---------- save the outfit ----------------------------------- */
-$('#save').onclick = async () => {
-  clearErr();
-  const btn = $('#save'); btn.disabled = true; btn.textContent = 'Saving';
-  try{
-    const worn_on = $('#worn').value;
-    const slot = $('#slot').value;
+/* ------------------------------------------------------------
+   PICKER (log an outfit / plan an occasion)
+   ------------------------------------------------------------ */
+let picker = null;
+async function openPicker(opts){
+  // opts: {date, slot, mode:'outfit'|'plan', occasion, trip, prefill:[ids], photo, suggested, saveLabel}
+  picker = {
+    mode: opts.mode || 'outfit', date: opts.date, slot: opts.slot || 'primary',
+    occasion: opts.occasion || null, trip: opts.trip || null,
+    picked: new Set(opts.prefill || []), photo: opts.photo || null, suggested: opts.suggested || null,
+    query:'', showAll:false, saveLabel: opts.saveLabel || 'Save', existing:null, loading:true, prefilled: !!opts.prefill,
+  };
+  drawPicker();
+  await loadPickerExisting();
+}
+async function loadPickerExisting(){
+  if (picker.mode !== 'outfit'){ picker.loading=false; drawPicker(); return; }
+  try {
+    const ex = await fetchOutfit(picker.date, picker.slot);
+    if (!picker) return;
+    picker.existing = ex;
+    if (!picker.prefilled){
+      if (ex) picker.picked = new Set(ex.items);
+      else if (picker.suggested?.visible?.length) picker.picked = new Set(picker.suggested.visible);
+      else picker.picked = new Set();
+    }
+  } catch(e){ fail('load the existing outfit', e); }
+  picker.loading = false; drawPicker();
+}
+function closePicker(){ if (picker?.photo?.url) URL.revokeObjectURL(picker.photo.url); picker=null; $('#layer').innerHTML=''; }
 
-    const { data: outfit, error: e1 } = await sb.from('outfits')
-      .upsert({ worn_on, slot, source:'app' }, { onConflict:'worn_on,slot' })
-      .select('id').single();
-    if (e1) throw e1;
+function pickerItems(){
+  let list = state.items.slice();
+  if (picker.mode==='plan' && !picker.showAll) list = list.filter(it => planAllowed(it, picker.occasion) || picker.picked.has(it.id));
+  const q = picker.query.trim().toLowerCase();
+  if (q) list = list.filter(it => [it.name, it.brand, it.notes].some(s => s && String(s).toLowerCase().includes(q)));
+  return list;
+}
+function drawPicker(){
+  if (!picker) return;
+  const p = picker;
+  const list = pickerItems();
+  const recent = list.filter(it => wearOf(it.id).n).sort((a,b)=>{ const A=wearOf(a.id),B=wearOf(b.id); return (B.last||'').localeCompare(A.last||'') || B.n-A.n; }).slice(0,12);
+  const recentIds = new Set(recent.map(i=>i.id));
+  const rest = grouped(list.filter(i=>!recentIds.has(i.id)));
+  const hiddenCount = p.mode==='plan' && !p.showAll ? state.items.filter(it => !planAllowed(it, p.occasion) && !p.picked.has(it.id)).length : 0;
+  const isPlan = p.mode==='plan';
+  const title = isPlan ? `PLAN · ${esc(fmtLabel(p.date))} · ${esc((SLOT[p.slot]||p.slot).toUpperCase())}` : `${esc(fmtLabel(p.date))}${p.trip?' · '+esc(tripShort(p.trip)):''}`;
+  const sugg = p.suggested;
+  const suggVisible = sugg?.visible?.map(id=>state.itemById.get(id)).filter(Boolean) || [];
+  const suggPossible = sugg?.possible?.map(s=>({it:state.itemById.get(s.id), why:s.reason})).filter(s=>s.it) || [];
+  const shownIds = new Set([...suggVisible.map(i=>i.id), ...suggPossible.map(s=>s.it.id)]);
 
-    const { error: e2 } = await sb.from('outfit_items')
-      .delete().eq('outfit_id', outfit.id);
-    if (e2) throw e2;
+  const rowsHTML = (its) => its.map(it => itemRowHTML(it, {check:p.picked.has(it.id)})).join('');
+  const warn = isPlan ? anchorWarning([...p.picked], p.occasion) : '';
 
-    const rows = [...state.picked].map(item_id => ({ outfit_id: outfit.id, item_id }));
-    const { error: e3 } = await sb.from('outfit_items').insert(rows);
-    if (e3) throw e3;
+  $('#layer').innerHTML = `<div class="sheet" role="dialog" aria-label="${isPlan?'Plan this outfit':'Log an outfit'}">
+    <div class="sheet-head">
+      <div class="between" style="align-items:center">
+        <button class="linkbtn" id="pk-cancel" style="padding-left:0">Cancel</button>
+        <span class="lbl">${title}</span>
+      </div>
+      ${isPlan ? `<div><div style="font-weight:600">${esc(p.occasion?.name||'')}</div>${p.occasion?.dress_code?`<div class="small muted">${esc(p.occasion.dress_code)}${p.occasion.formality_min?` · formality ${p.occasion.formality_min}${p.occasion.formality_max&&p.occasion.formality_max!==p.occasion.formality_min?'–'+p.occasion.formality_max:''}`:''}</div>`:''}</div>`
+      : `<div class="seg c4" role="radiogroup" aria-label="Slot">${PICK_SLOTS.map(s=>`<button type="button" data-slot="${s}" aria-pressed="${p.slot===s}">${SLOT[s]}</button>`).join('')}</div>`}
+      ${p.photo ? `<div class="photo-preview"><img src="${esc(p.photo.url)}" alt="Your selfie"><div style="display:flex;flex-direction:column;justify-content:center;gap:6px"><div style="font-size:18px;font-weight:600;line-height:1.2">${suggVisible.length?"Here's what I can see":'Photo attached'}</div><div class="hint">${suggVisible.length?"Untick anything wrong. Tick the maybes you're wearing.":'Pick what you\'re wearing. Automatic recognition isn\'t set up yet.'}</div></div></div>` : ''}
+      <input type="search" class="input" id="pk-q" placeholder="Search your closet" value="${esc(p.query)}" autocomplete="off" autocorrect="off" autocapitalize="off">
+    </div>
+    <div class="sheet-body" id="pk-body">
+      ${p.loading ? '<div class="loading">Loading</div>' : ''}
+      ${suggVisible.length ? `<div class="lbl grouphead">Clearly visible</div><div class="rows">${rowsHTML(suggVisible)}</div>` : ''}
+      ${suggPossible.length ? `<div class="lbl grouphead">Possible · partly hidden</div><div class="rows">${suggPossible.map(s=>itemRowHTML(s.it,{check:p.picked.has(s.it.id), end:{text:s.why}})).join('')}</div>` : ''}
+      ${recent.length ? `<div class="lbl grouphead">Worn lately</div><div class="rows">${rowsHTML(recent.filter(i=>!shownIds.has(i.id)))}</div>` : ''}
+      ${rest.map(g=>`<div class="lbl grouphead">${esc(g.label)} · ${g.items.length}</div><div class="rows">${rowsHTML(g.items.filter(i=>!shownIds.has(i.id)))}</div>`).join('')}
+      ${!list.length && !p.loading ? '<div class="empty">Nothing matches.</div>' : ''}
+      ${hiddenCount ? `<button class="btn dashed" id="pk-showall" style="margin-top:16px">Show ${hiddenCount} hidden by the dress code / storage</button>` : ''}
+    </div>
+    <div class="sheet-foot">
+      <div class="tally"><b>${p.picked.size}</b> <span class="muted">selected${p.photo?' + photo':''}</span>${warn?`<div class="small" style="color:var(--warn)">${esc(warn)}</div>`:''}</div>
+      <button class="btn primary" id="pk-save" ${p.picked.size?'':'disabled'}>${esc(p.saveLabel)}</button>
+    </div>
+  </div>`;
+  // bind
+  $('#pk-cancel').onclick = closePicker;
+  const q = $('#pk-q');
+  q.oninput = () => { const pos=q.selectionStart; p.query = q.value; drawPickerBody(); };
+  $$('#layer .seg button').forEach(b => b.onclick = async () => { if (p.slot===b.dataset.slot) return; p.slot=b.dataset.slot; p.prefilled=false; p.loading=true; drawPicker(); await loadPickerExisting(); });
+  bindPickerBody();
+  $('#pk-save').onclick = savePicker;
+}
+function drawPickerBody(){ // re-render only the list, keep the search box focused
+  const scroll = $('#pk-body')?.scrollTop || 0;
+  const q = $('#pk-q'); const pos = q ? q.selectionStart : null; const focused = document.activeElement===q;
+  drawPicker();
+  if (focused){ const q2=$('#pk-q'); q2.focus(); try{ q2.setSelectionRange(pos,pos);}catch{} }
+  $('#pk-body').scrollTop = scroll;
+}
+function bindPickerBody(){
+  $$('#pk-body .row[role="checkbox"]').forEach(b => b.onclick = () => {
+    const id=Number(b.dataset.id); picker.picked.has(id) ? picker.picked.delete(id) : picker.picked.add(id);
+    $$(`#pk-body .row[data-id="${id}"]`).forEach(r=>r.setAttribute('aria-checked', picker.picked.has(id)));
+    const t=$('#layer .tally b'); if (t) t.textContent = picker.picked.size;
+    const s=$('#pk-save'); if (s) s.disabled = !picker.picked.size;
+    if (picker.mode==='plan'){ drawPickerBody(); }
+  });
+  $('#pk-showall')?.addEventListener('click', ()=>{ picker.showAll=true; drawPickerBody(); });
+}
+async function savePicker(){
+  const p = picker; if (!p || !p.picked.size) return;
+  const btn = $('#pk-save'); btn.disabled = true; btn.textContent = 'Saving…';
+  const ids = [...p.picked];
+  try {
+    if (p.mode==='plan'){
+      await savePlan(p.occasion.id, ids);
+      toast(`Planned ${ids.length} items`); closePicker(); render(); return;
+    }
+    let photoPath = null;
+    if (p.photo){ photoPath = await uploadBlob(`outfits/${p.date}-${p.slot}.jpg`, p.photo.blob, true); }
+    const tripId = p.trip?.id || tripForDate(p.date)?.id || null;
+    await saveOutfit({date:p.date, slot:p.slot, itemIds:ids, tripId, photoPath});
+    toast(`Logged ${ids.length} item${ids.length===1?'':'s'} · ${SLOT[p.slot]}`);
+    const date = p.date; closePicker();
+    if (route().seg[0]==='trip') render(); else go(date===todayISO() ? '#/today' : `#/day/${date}`);
+    if (location.hash.replace(/^#\/?/,'')===(date===todayISO()?'today':`day/${date}`)) render();
+  } catch(e){ fail('save', e); btn.disabled=false; btn.textContent=p.saveLabel; }
+}
 
-    toast(`Logged ${rows.length} items for ${worn_on}`);
-    await freshness();
-  }catch(e){ fail('save the outfit', e); }
-  finally{ btn.textContent = 'Save'; tally(); }
-};
-
-/* ---------- repeat last outfit -------------------------------- */
-$('#repeat').onclick = async () => {
-  clearErr();
-  try{
-    const { data, error } = await sb.from('outfits')
-      .select('id,worn_on,outfit_items(item_id)')
-      .order('worn_on',{ascending:false}).limit(1);
-    if (error) throw error;
-    const last = data?.[0];
-    if (!last) return toast('No previous outfit to repeat');
-    state.picked = new Set((last.outfit_items||[]).map(r=>r.item_id));
+/* ------------------------------------------------------------
+   TRIP
+   ------------------------------------------------------------ */
+function tripHTML(){
+  const tr = currentTrip();
+  const seg = `<div class="seg c2 soft" role="tablist"><button type="button" data-tab="days" aria-pressed="${state.tripTab==='days'}">Days</button><button type="button" data-tab="pack" aria-pressed="${state.tripTab==='pack'}">Pack</button></div>`;
+  if (!tr) return `<div class="stack">${seg}<h1 class="sm">No trip planned</h1><div class="hint">Trips, occasions and plans live in the database (trips · trip_occasions · occasion_items). Add one there and it shows up here.</div></div>`;
+  return `<div class="stack">${seg}${state.tripTab==='pack' ? packHTML(tr) : daysHTML(tr)}</div>`;
+}
+function daysHTML(tr){
+  const days = []; for (let d=tr.start_date; d<=tr.end_date; d=addDays(d,1)) days.push(d);
+  const t = todayISO();
+  if (!state.tripDay || !days.includes(state.tripDay)) state.tripDay = days.includes(t) ? t : days[0];
+  const day = state.tripDay, idx = days.indexOf(day)+1;
+  const occs = tr.trip_occasions.filter(o=>o.occasion_date===day);
+  const cards = occs.map(o => occasionCardHTML(tr, o)).join('');
+  const extraLogged = outfitsOn(day).filter(o => !occs.some(x=>x.slot===o.slot));
+  return `
+    <div class="daychips">${days.map(d=>`<button type="button" data-day="${d}" aria-pressed="${d===day}" class="${outfitsOn(d).length?'logged':''}">${esc(fmtLabel(d))}</button>`).join('')}</div>
+    <div class="stack tight" style="gap:6px">
+      <div class="lbl">${esc(tripShort(tr))} · DAY ${idx} OF ${days.length}</div>
+      <h1 class="sm">${esc(fmtLong(day))}</h1>
+      ${tr.destination?`<div class="small muted">${esc(tr.destination)}</div>`:''}
+    </div>
+    ${cards || '<div class="card dashed"><div class="hint">Nothing on the itinerary for this day.</div></div>'}
+    ${extraLogged.map(o=>`<div class="card"><div class="lbl">${esc(SLOT[o.slot])} · LOGGED</div><div class="small muted">${o.items.length} items, not on the itinerary.</div><button class="linkbtn" data-open-day="${o.worn_on}" style="padding-left:0">See the day</button></div>`).join('')}
+    <button class="btn dashed" id="trip-log-other">Log something else today</button>`;
+}
+function occasionCardHTML(tr, o){
+  const planned = (o.occasion_items||[]).map(r=>r.item_id);
+  const its = planned.map(id=>state.itemById.get(id)).filter(Boolean);
+  const worn = outfitFor(o.occasion_date, o.slot);
+  const missing = planned.length ? missingLayers(planned) : [];
+  const head = `<div class="between" style="align-items:center"><span class="lbl ${planned.length?'accent':''}">${esc((SLOT[o.slot]||o.slot).toUpperCase())}${worn?' · LOGGED':''}</span>${planned.length?`<button class="linkbtn" data-plan="${o.id}" style="padding:6px 0 6px 12px;min-height:32px;font-size:13px">Edit plan</button>`:''}</div>
+    <h2>${esc(o.name)}</h2>${o.dress_code?`<div class="small muted">${esc(o.dress_code)}</div>`:''}${o.notes?`<div class="small muted">${esc(o.notes)}</div>`:''}`;
+  if (worn){
+    const wits = worn.items.map(id=>state.itemById.get(id)).filter(Boolean);
+    return `<div class="card ${planned.length?'accent':''}">${head}
+      <div class="rows">${wits.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`})).join('')}</div>
+      <div class="btn-row"><button class="btn" data-edit-worn="${o.id}">Edit what I wore</button><button class="btn" data-open-day="${o.occasion_date}">See the day</button></div>
+    </div>`;
+  }
+  if (!planned.length){
+    return `<div class="card">${head}<button class="btn dashed" data-plan="${o.id}">Plan this outfit</button><button class="btn" data-wore-adhoc="${o.id}">Log what I wore</button></div>`;
+  }
+  return `<div class="card accent">${head}
+    <div class="rows">${its.map(i=>itemRowHTML(i)).join('')}${missing.map(m=>`<div class="warnrow"><span class="sw sm dashed"></span><span class="txt">${esc(m)}</span></div>`).join('')}</div>
+    <div class="btn-row"><button class="btn primary" data-wore="${o.id}">Wore this</button><button class="btn" data-swap="${o.id}">Swap an item</button></div>
+  </div>`;
+}
+function bindTrip(){
+  $$('#view .seg button').forEach(b => b.onclick = () => { state.tripTab=b.dataset.tab; render(); });
+  $$('.daychips button').forEach(b => b.onclick = () => { state.tripDay=b.dataset.day; render(); });
+  const tr = currentTrip(); if (!tr) return;
+  const occ = id => tr.trip_occasions.find(o=>o.id===Number(id));
+  $$('[data-plan]').forEach(b => b.onclick = () => { const o=occ(b.dataset.plan); openPicker({mode:'plan', date:o.occasion_date, slot:o.slot, occasion:o, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save plan'}); });
+  $$('[data-swap]').forEach(b => b.onclick = () => { const o=occ(b.dataset.swap); openPicker({date:o.occasion_date, slot:o.slot, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save as worn'}); });
+  $$('[data-wore-adhoc]').forEach(b => b.onclick = () => { const o=occ(b.dataset.woreAdhoc); openPicker({date:o.occasion_date, slot:o.slot, trip:tr}); });
+  $$('[data-edit-worn]').forEach(b => b.onclick = () => { const o=occ(b.dataset.editWorn); openPicker({date:o.occasion_date, slot:o.slot, trip:tr}); });
+  $$('[data-open-day]').forEach(b => b.onclick = () => go(b.dataset.openDay===todayISO()?'#/today':`#/day/${b.dataset.openDay}`));
+  $('#trip-log-other')?.addEventListener('click', ()=>openPicker({date:state.tripDay, slot:'primary', trip:tr}));
+  $$('#packlist .row').forEach(b => b.onclick = () => {
+    const key = `pack:${tr.id}`; let packed = {};
+    try { packed = JSON.parse(localStorage.getItem(key)||'{}'); } catch {}
+    if (packed[b.dataset.id]) delete packed[b.dataset.id]; else packed[b.dataset.id] = true;
+    try { localStorage.setItem(key, JSON.stringify(packed)); } catch(e){ fail('save the tick on this phone', e); }
     render();
-    toast('Filled from ' + last.worn_on);
-  }catch(e){ fail('load your last outfit', e); }
-};
+  });
+  $$('[data-wore]').forEach(b => b.onclick = async () => {
+    const o = occ(b.dataset.wore); const ids=(o.occasion_items||[]).map(r=>r.item_id); if (!ids.length) return;
+    b.disabled=true; b.textContent='Saving…';
+    try {
+      const existing = await fetchOutfit(o.occasion_date, o.slot);
+      if (existing && existing.items.length && !confirm(`${SLOT[o.slot]} on ${fmtShort(o.occasion_date)} is already logged with ${existing.items.length} items. Replace it with the plan?`)){ b.disabled=false; b.textContent='Wore this'; return; }
+      await saveOutfit({date:o.occasion_date, slot:o.slot, itemIds:ids, tripId:tr.id});
+      toast(`Logged ${ids.length} items · ${SLOT[o.slot]}`); render();
+    } catch(e){ fail('log the outfit', e); b.disabled=false; b.textContent='Wore this'; }
+  });
+}
+function packHTML(tr){
+  const occs = tr.trip_occasions;
+  const planned = occs.filter(o => (o.occasion_items||[]).length);
+  const uses = new Map(); // item id -> [occasion labels]
+  for (const o of planned) for (const r of o.occasion_items){ const a=uses.get(r.item_id)||[]; a.push(`${WD[parseISO(o.occasion_date).getDay()].toUpperCase()} ${(SLOT[o.slot]||o.slot).toUpperCase()}`); uses.set(r.item_id,a); }
+  const items = [...uses.keys()].map(id=>state.itemById.get(id)).filter(Boolean);
+  const groups = grouped(items);
+  const key = `pack:${tr.id}`; let packed = {}; try { packed = JSON.parse(localStorage.getItem(key)||'{}'); } catch {}
+  const nPacked = items.filter(i=>packed[i.id]).length;
+  const missing = planned.flatMap(o => missingLayers(o.occasion_items.map(r=>r.item_id)).map(m => `${m} · ${WD[parseISO(o.occasion_date).getDay()]} ${(SLOT[o.slot]||o.slot).toLowerCase()}`));
+  const pct = occs.length ? Math.round(planned.length/occs.length*100) : 0;
+  return `
+    <div class="stack tight" style="gap:6px">
+      <div class="lbl">${esc(tripShort(tr))} · ${esc(fmtLabel(tr.start_date))} – ${esc(fmtLabel(tr.end_date))}</div>
+      <h1 class="sm">${items.length} item${items.length===1?'':'s'} to pack</h1>
+      <div class="small muted">Built from the plan · ${planned.length} of ${occs.length} occasions planned${items.length?` · ${nPacked} packed`:''}</div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+    </div>
+    ${items.length ? `<div class="rows" id="packlist">${groups.map(g=>`<div class="lbl grouphead">${esc(g.label)}</div>${g.items.map(it=>`<button type="button" class="row tappable" role="checkbox" aria-checked="${packed[it.id]?'true':'false'}" data-id="${it.id}"><span class="check"></span>${swatchHTML(it,'sm')}<span class="rowmain"><span class="name" ${packed[it.id]?'style="color:var(--muted);text-decoration:line-through"':''}>${esc(it.name)}</span><span class="brand">${esc(uses.get(it.id).join(' · '))}</span></span></button>`).join('')}`).join('')}</div>` : '<div class="card dashed"><div class="hint">Nothing planned yet. Plan an occasion under Days and it lands here.</div></div>'}
+    ${missing.length ? `<div class="stack tight" style="gap:4px"><div class="lbl warn">Missing</div>${missing.map(m=>`<div class="warnrow"><span class="sw sm dashed"></span><span class="txt">${esc(m)}</span></div>`).join('')}</div>` : ''}
+    <div class="hint">Ticks are saved on this phone only.</div>`;
+}
 
-/* ---------- add an item --------------------------------------- */
-$('#addbtn').onclick = () => $('#addsheet').classList.add('show');
-$('#addcancel').onclick = () => $('#addsheet').classList.remove('show');
-$('#nlayer').onchange = () => {
-  const match = state.cats.find(c => c.default_layer === $('#nlayer').value);
-  if (match) $('#ncat').value = match.id;
+/* ------------------------------------------------------------
+   CLOSET
+   ------------------------------------------------------------ */
+const GAPS = {
+  price:{ label:'Price', test:i=>i.unit_price==null || i.price_source==='estimate' },
+  size: { label:'Size',  test:i=>!i.size || !String(i.size).trim() },
+  photo:{ label:'Photo', test:i=>!i.photo_ref },
+  date: { label:'Date',  test:i=>!i.purchase_date },
+  spot: { label:'Spot',  test:i=>!i.location },
 };
-$('#addsave').onclick = async () => {
-  clearErr();
-  const name = $('#nname').value.trim();
-  if (!name) return toast('Give it a name first');
-  try{
-    const { data, error } = await sb.from('items').insert({
-      name,
-      layer: $('#nlayer').value,
-      category_id: Number($('#ncat').value),
-      item_class: $('#nclass').value,
-      price_source: 'unknown',
-      photo_source: 'none',
-      source: 'app'
-    }).select('id').single();
-    if (error) throw error;
-    $('#nname').value = '';
-    $('#addsheet').classList.remove('show');
-    await loadItems();
-    state.picked.add(data.id);
-    render();
-    await freshness();
-    toast('Added ' + name);
-  }catch(e){ fail('add that item', e); }
-};
+function closetHTML(){
+  const all = state.items;
+  const q = state.closetQuery.trim().toLowerCase();
+  const match = it => !q || [it.name,it.brand,it.notes,it.retailer,tagFor(it)].some(s=>s && String(s).toLowerCase().includes(q));
+  const f = state.closetFilter;
+  let body = '';
+  if (f){
+    const list = all.filter(GAPS[f].test).filter(match);
+    if (f==='price'){
+      const nulls = list.filter(i=>i.unit_price==null), est = list.filter(i=>i.unit_price!=null);
+      body = `${nulls.length?`<div class="lbl grouphead warn">No price · ${nulls.length}</div><div class="rows">${nulls.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`, end:{text:'no price',cls:'warn'}})).join('')}</div>`:''}
+              ${est.length?`<div class="lbl grouphead">Estimated · ${est.length}</div><div class="rows">${est.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`, end:priceText(i)})).join('')}</div>`:''}`;
+    } else {
+      const tag = {size:'no size', photo:'no photo', date:'no date', spot:'no spot'}[f];
+      body = `<div class="lbl grouphead warn">${esc(tag)} · ${list.length}</div><div class="rows">${list.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`, end:{text:tag,cls:'warn'}})).join('')}</div>`;
+    }
+    if (!list.length) body = '<div class="empty">Nothing here.</div>';
+  } else {
+    const list = all.filter(match);
+    body = grouped(list).map(g=>`<div class="lbl grouphead">${esc(g.label)} · ${g.items.length}</div><div class="rows">${g.items.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`, end:priceText(i)})).join('')}</div>`).join('') || '<div class="empty">Nothing matches.</div>';
+  }
+  return `<div class="stack" style="gap:14px">
+    <div class="between"><h1 class="sm">Closet</h1><span class="mono">${all.length} ITEMS</span></div>
+    <input type="search" class="input" id="cl-q" placeholder="Search your closet" value="${esc(state.closetQuery)}" autocomplete="off" autocorrect="off" autocapitalize="off">
+    <div class="stack tight" style="gap:8px"><div class="lbl">Needs attention</div>
+      <div class="counters">${Object.entries(GAPS).map(([k,g])=>`<button type="button" data-f="${k}" aria-pressed="${f===k}"><b>${all.filter(g.test).length}</b><span>${g.label}</span></button>`).join('')}</div>
+    </div>
+    <div>${body}</div>
+  </div>`;
+}
+function bindCloset(){
+  $$('.counters button').forEach(b => b.onclick = () => { state.closetFilter = state.closetFilter===b.dataset.f ? null : b.dataset.f; render(); });
+  const q = $('#cl-q');
+  q.oninput = () => { state.closetQuery = q.value; const pos=q.selectionStart; render(); const q2=$('#cl-q'); q2.focus(); try{q2.setSelectionRange(pos,pos);}catch{} };
+}
 
-/* ---------- go ------------------------------------------------- */
-$('#worn').value = new Date(Date.now() - new Date().getTimezoneOffset()*60000)
-  .toISOString().slice(0,10);
-boot();
+/* ------------------------------------------------------------
+   ITEM
+   ------------------------------------------------------------ */
+const itemUI = { id:null, photos:null, slide:0, editing:null };
+async function renderItem(id){
+  const it = state.itemById.get(id);
+  if (!it){ $('#view').innerHTML = `<div class="stack"><a class="linkbtn" href="#/closet" style="padding-left:0">‹ Closet</a><div class="empty">No item ${id}.</div></div>`; return; }
+  if (itemUI.id !== id){ itemUI.id=id; itemUI.photos=null; itemUI.slide=0; itemUI.editing=null; }
+  drawItem(it);
+  if (itemUI.photos === null){
+    try { const files = await listItemPhotos(it); if (itemUI.id===id){ itemUI.photos = files; const cover=stripBucket(it.photo_ref); itemUI.slide = Math.max(0, files.indexOf(cover)); drawItem(state.itemById.get(id)); } }
+    catch(e){ itemUI.photos = []; fail('list photos', e); drawItem(state.itemById.get(id)); }
+  }
+}
+function drawItem(it){
+  const w = wearOf(it.id);
+  const photos = itemUI.photos;
+  const cover = stripBucket(it.photo_ref);
+  const looks = state.outfits.filter(o => o.photo_ref && o.items.includes(it.id));
+  const gaps = [
+    ['size','Size', !it.size],
+    ['unit_price','Price', it.unit_price==null],
+    ['purchase_date','Bought', !it.purchase_date],
+    ['retailer','Retailer', !it.retailer],
+    ['location','Where it lives', !it.location],
+  ];
+  const known = [
+    ['category_id','Category', catOf(it) ? catOf(it).name : '—'],
+    ['formality','Formality', it.formality ? `${it.formality} · ${FORMALITY[it.formality]}` : '—'],
+    ['weight','Weight', it.weight ? cap(it.weight) : '—'],
+    ['season_tags','Seasons', (it.season_tags||[]).length ? it.season_tags.map(cap).join(' · ') : '—'],
+  ];
+  const valueOf = (k) => ({
+    size: it.size, unit_price: it.unit_price==null?null:priceText(it), purchase_date: it.purchase_date ? fmtShort(it.purchase_date)+' '+parseISO(it.purchase_date).getFullYear() : null,
+    retailer: it.retailer, location: it.location,
+  })[k];
+  const fieldHTML = (k,label,isGap) => {
+    if (itemUI.editing===k) return editRowHTML(it,k,label);
+    if (isGap) return `<button type="button" class="field gap" data-edit="${k}"><span class="k">${esc(label)}</span><span class="btn warn small" style="pointer-events:none">Add</span></button>`;
+    return `<button type="button" class="field" data-edit="${k}"><span class="k">${esc(label)}</span><span class="v">${esc(valueOf(k))}</span></button>`;
+  };
+  const gapRows = gaps.filter(g=>g[2]).map(([k,l])=>fieldHTML(k,l,true)).join('');
+  const knownGapRows = gaps.filter(g=>!g[2]).map(([k,l])=>fieldHTML(k,l,false)).join('');
+  const knownRows = known.map(([k,l,v]) => itemUI.editing===k ? editRowHTML(it,k,l) : `<button type="button" class="field" data-edit="${k}"><span class="k">${esc(l)}</span><span class="v">${esc(v)}</span></button>`).join('');
+
+  let carousel;
+  if (photos === null) carousel = `<div class="slide plate" style="background:${esc(it.swatch_hex||'#3A3F46')}">loading photos…</div>`;
+  else if (!photos.length) carousel = `<div class="slide plate" style="background:${esc(it.swatch_hex||'#3A3F46')}">No photo</div>`;
+  else carousel = photos.map((p,i)=>`<div class="slide" data-i="${i}"><img src="${esc(publicUrl(p))}" alt="${esc(it.name)} photo ${i+1}"><div class="badges">${p===cover?'<span class="badge cover">COVER</span>':''}<span class="badge">${esc(kindOfPhoto(p,it))}</span></div></div>`).join('');
+  const cur = photos && photos.length ? photos[Math.min(itemUI.slide, photos.length-1)] : null;
+
+  $('#view').innerHTML = `<div class="stack" style="gap:14px">
+    <a class="linkbtn" href="#/closet" id="it-back" style="padding-left:0">‹ Closet</a>
+    <div class="stack tight" style="gap:8px">
+      <div class="carousel" id="it-car">${carousel}</div>
+      <div class="between" style="align-items:center">
+        <div class="dots">${photos&&photos.length>1?photos.map((_,i)=>`<i class="${i===itemUI.slide?'on':''}"></i>`).join('')+`<span class="mono" style="padding-left:6px">${itemUI.slide+1} / ${photos.length}</span>`:''}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn small" id="it-addphoto">+ Photo</button>
+          ${cur && cur!==cover ? `<button class="btn small outline" id="it-cover">Set as cover</button>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="stack tight" style="gap:4px">
+      <div class="lbl">${esc(it.brand||'—')} · ${esc(tagFor(it))}</div>
+      <h1 style="font-size:24px">${esc(it.name)}</h1>
+      <div class="small muted">${w.n ? `Worn ${w.n===1?'once':w.n===2?'twice':w.n+' times'} · last ${esc(relDay(w.last))}` : 'Never worn'}</div>
+    </div>
+    ${looks.length ? `<div class="stack tight" style="gap:8px"><div class="between"><span class="lbl">Looks · ${looks.length}</span><span class="mono" style="text-transform:none;letter-spacing:0">outfit photos it's in</span></div>
+      <div class="looks">${looks.map(o=>`<a class="look" href="${o.worn_on===todayISO()?'#/today':`#/day/${o.worn_on}`}"><img src="${esc(publicUrl(o.photo_ref))}" alt=""><span>${esc(fmtLabel(o.worn_on))}</span></a>`).join('')}</div></div>` : ''}
+    <div class="rows">
+      ${gapRows}
+      <div class="field"><span class="k">Colour</span><span class="v"><span class="sw" style="background:${esc(it.swatch_hex||'#3A3F46')}"></span>${it.swatch_source==='photo'?'from cover photo':'from colour name'}</span></div>
+      ${knownGapRows}
+      ${knownRows}
+    </div>
+    ${itemUI.editing==='notes' ? editRowHTML(it,'notes','Notes') : `<button type="button" class="notes" data-edit="notes" style="text-align:left;width:100%">${it.notes ? esc(it.notes) : '<span class="muted">Add a note</span>'}</button>`}
+    <div class="hint">Photos are never deleted here. Changing the cover re-samples the colour.</div>
+  </div>`;
+  bindItem(it);
+}
+function editRowHTML(it, k, label){
+  const wrap = inner => `<div class="editrow" data-editing="${k}"><div class="between"><span class="k muted">${esc(label)}</span></div>${inner}<div class="actions"><button class="btn small" data-cancel>Cancel</button><button class="btn small primary" data-save>Save</button></div></div>`;
+  switch (k){
+    case 'size': return wrap(`<input class="input" id="ed" type="text" value="${esc(it.size||'')}" placeholder="e.g. M, 32x30, US 12" autocapitalize="characters">`);
+    case 'unit_price': return wrap(`<input class="input" id="ed" type="number" inputmode="decimal" step="0.01" min="0" value="${it.unit_price==null?'':esc(it.unit_price)}" placeholder="What you paid"><div class="hint">Saved as a manual price (no ~).</div>`);
+    case 'purchase_date': return wrap(`<input class="input" id="ed" type="date" value="${esc(it.purchase_date||'')}">`);
+    case 'retailer': return wrap(`<input class="input" id="ed" type="text" value="${esc(it.retailer||'')}" placeholder="Shop or site">`);
+    case 'location': return wrap(`<select class="input" id="ed"><option value="">At home, spot unknown</option>${LOCATIONS.map(l=>`<option ${it.location===l?'selected':''}>${l}</option>`).join('')}</select>`);
+    case 'category_id': {
+      const parents = state.cats.filter(c=>!c.parent_id);
+      return wrap(`<select class="input" id="ed">${parents.map(p=>`<optgroup label="${esc(p.name)}">${state.cats.filter(c=>c.parent_id===p.id).map(c=>`<option value="${c.id}" ${it.category_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>`).join('')}</select>`);
+    }
+    case 'formality': return wrap(`<select class="input" id="ed"><option value="">—</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${it.formality===n?'selected':''}>${n} · ${FORMALITY[n]}</option>`).join('')}</select>`);
+    case 'weight': return wrap(`<select class="input" id="ed"><option value="">—</option>${['light','mid','heavy'].map(v=>`<option value="${v}" ${it.weight===v?'selected':''}>${cap(v)}</option>`).join('')}</select>`);
+    case 'season_tags': return wrap(`<div class="chips" id="ed" style="justify-content:flex-start">${SEASONS.map(s=>`<button type="button" class="chip" data-s="${s}" aria-pressed="${(it.season_tags||[]).includes(s)}">${cap(s)}</button>`).join('')}</div>`);
+    case 'notes': return wrap(`<textarea class="input" id="ed" placeholder="Nicknames, fit notes, anything searchable">${esc(it.notes||'')}</textarea>`);
+  }
+  return '';
+}
+function bindItem(it){
+  $('#it-back').onclick = (e) => { if (history.length>1 && document.referrer!==''){ /* fallthrough to hash */ } };
+  const car = $('#it-car');
+  car.onscroll = () => { const i = Math.round(car.scrollLeft / 308); if (i!==itemUI.slide && itemUI.photos && itemUI.photos[i]!==undefined){ itemUI.slide=i; const dots=$$('.dots i'); dots.forEach((d,j)=>d.classList.toggle('on',j===i)); const m=$('.dots .mono'); if (m) m.textContent=`${i+1} / ${itemUI.photos.length}`; const cover=stripBucket(it.photo_ref); const cb=$('#it-cover'); const should = itemUI.photos[i]!==cover; if (cb && !should) cb.remove(); if (!cb && should) drawItem(it); } };
+  if (itemUI.photos && itemUI.photos.length) requestAnimationFrame(()=>{ car.scrollLeft = itemUI.slide*308; });
+
+  $('#it-addphoto').onclick = async () => {
+    const file = await pickFile(); if (!file) return;
+    toast('Uploading…');
+    try {
+      const { blob, hex } = await processFile(file, 1600);
+      const path = `${photoPrefix(it)}${slug(it.name)}-own-${stamp()}.jpg`;
+      await uploadBlob(path, blob, false);
+      itemUI.photos = [...(itemUI.photos||[]), path];
+      if (!it.photo_ref){
+        const patch = { photo_ref: path, photo_source:'own_photo' };
+        if (hex) Object.assign(patch, { swatch_hex: hex, swatch_source:'photo' });
+        it = await updateItem(it.id, patch);
+        toast('Photo added and set as cover');
+      } else toast('Photo added');
+      itemUI.slide = itemUI.photos.length-1; drawItem(it);
+    } catch(e){ fail('upload the photo', e); }
+  };
+  $('#it-cover')?.addEventListener('click', async () => {
+    const path = itemUI.photos[itemUI.slide]; if (!path) return;
+    const btn=$('#it-cover'); btn.disabled=true; btn.textContent='Sampling…';
+    try {
+      let hex = null;
+      try { hex = await sampleFromUrl(publicUrl(path)); } catch(e){ console.warn('swatch sample failed', e); }
+      const patch = { photo_ref: path, photo_source: kindOfPhoto(path,it)==='RETAIL' ? 'retailer' : 'own_photo' };
+      if (hex) Object.assign(patch, { swatch_hex: hex, swatch_source:'photo' });
+      it = await updateItem(it.id, patch);
+      toast(hex ? `Cover set · colour ${hex}` : 'Cover set (colour unchanged)'); drawItem(it);
+    } catch(e){ fail('set the cover', e); btn.disabled=false; btn.textContent='Set as cover'; }
+  });
+  $$('[data-edit]').forEach(b => b.onclick = () => { itemUI.editing = b.dataset.edit; drawItem(it); const ed=$('#ed'); if (ed && ed.focus && ed.tagName!=='DIV') ed.focus(); });
+  const er = $('.editrow');
+  if (er){
+    const k = er.dataset.editing;
+    er.querySelector('[data-cancel]').onclick = () => { itemUI.editing=null; drawItem(it); };
+    $$('.chip', er).forEach(c => c.onclick = () => c.setAttribute('aria-pressed', c.getAttribute('aria-pressed')!=='true'));
+    er.querySelector('[data-save]').onclick = async () => {
+      const ed = $('#ed'); let patch = {};
+      switch (k){
+        case 'size': patch.size = ed.value.trim() || null; break;
+        case 'unit_price': { const v = ed.value.trim(); if (v==='') { patch.unit_price=null; } else { const n=Number(v); if (!(n>=0)) return toast('Enter a price'); patch.unit_price=n; patch.price_source='manual'; } break; }
+        case 'purchase_date': patch.purchase_date = ed.value || null; break;
+        case 'retailer': patch.retailer = ed.value.trim() || null; break;
+        case 'location': patch.location = ed.value || null; break;
+        case 'category_id': { const cid=Number(ed.value); patch.category_id=cid; const c=state.catById.get(cid); if (c?.default_layer) patch.layer=c.default_layer; break; }
+        case 'formality': patch.formality = ed.value ? Number(ed.value) : null; break;
+        case 'weight': patch.weight = ed.value || null; break;
+        case 'season_tags': patch.season_tags = $$('.chip', er).filter(c=>c.getAttribute('aria-pressed')==='true').map(c=>c.dataset.s); break;
+        case 'notes': patch.notes = ed.value.trim() || null; break;
+      }
+      const sb_ = er.querySelector('[data-save]'); sb_.disabled=true; sb_.textContent='Saving…';
+      try { it = await updateItem(it.id, patch); itemUI.editing=null; toast('Saved'); drawItem(it); }
+      catch(e){ fail('save', e); sb_.disabled=false; sb_.textContent='Save'; }
+    };
+    const ed=$('#ed'); if (ed && ed.tagName==='INPUT') ed.onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); er.querySelector('[data-save]').click(); } };
+  }
+}
+
+/* ------------------------------------------------------------
+   Auth + start
+   ------------------------------------------------------------ */
+function showAuth(){
+  $('#layer').innerHTML = `<div class="sheet" role="dialog" aria-label="Sign in"><div class="sheet-body" style="padding-top:calc(var(--sat) + 60px)"><div class="stack">
+    <div class="stack tight"><div class="lbl">Wardrobe</div><h1>Sign in</h1><div class="hint">Once per device. You stay signed in.</div></div>
+    <form id="authform" class="stack tight" style="gap:12px">
+      <input class="input" type="email" id="email" placeholder="Email" autocomplete="username" required>
+      <input class="input" type="password" id="pw" placeholder="Password" autocomplete="current-password" required>
+      <button class="btn primary big" type="submit" id="signin">Sign in</button>
+    </form>
+    <div id="autherr" class="small" style="color:var(--warn)"></div>
+  </div></div></div>`;
+  $('#authform').onsubmit = async e => {
+    e.preventDefault(); const b=$('#signin'); b.disabled=true; b.textContent='Signing in…'; $('#autherr').textContent='';
+    const { error } = await sb.auth.signInWithPassword({ email:$('#email').value.trim(), password:$('#pw').value });
+    if (error){ $('#autherr').textContent = error.message; b.disabled=false; b.textContent='Sign in'; }
+    // success: onAuthStateChange → start()
+  };
+}
+let starting = false;
+async function start(){
+  if (state.ready || starting) return; starting = true;
+  $('#layer').innerHTML = '';
+  $('#view').innerHTML = '<div class="loading">Loading your closet</div>';
+  try { await loadAll(); state.ready = true; render(); }
+  catch(e){ fail('load your closet', e); $('#view').innerHTML = `<div class="stack"><h1 class="sm">Couldn't load</h1><div class="hint">${esc(e.message||e)}</div><button class="btn" onclick="location.reload()">Reload</button></div>`; }
+  finally { starting = false; }
+}
+async function main(){
+  sb.auth.onAuthStateChange((_ev, session) => { if (session) start(); else if (state.ready) { state.ready=false; showAuth(); } });
+  const { data:{ session } } = await sb.auth.getSession();
+  if (session) start(); else showAuth();
+  if (!location.hash) location.hash = '#/today';
+}
+main();
 </script>
 </body>
 </html>
