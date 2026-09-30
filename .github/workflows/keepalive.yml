@@ -1,0 +1,35 @@
+# Keeps the Supabase free-tier project from pausing (it pauses after 7 idle days).
+# One lightweight REST request a day, made with the publishable key.
+# The key is the same one that ships in index.html, so the secret is a nicety,
+# not a security boundary: if SUPABASE_PUBLISHABLE_KEY is not set, the key is
+# read out of index.html so the ping still runs.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: '17 9 * * *'   # 09:17 UTC daily
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ping the REST API
+        env:
+          SUPABASE_URL: https://sobshyactzxhtsayemkj.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          KEY="${SUPABASE_PUBLISHABLE_KEY:-}"
+          if [ -z "$KEY" ]; then
+            KEY=$(grep -oE "sb_publishable_[A-Za-z0-9_-]+" index.html | head -n1)
+            echo "Secret not set; using the publishable key from index.html"
+          fi
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' \
+            -A 'wardrobe-keepalive (github-actions)' \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+            "$SUPABASE_URL/rest/v1/categories?select=id&limit=1")
+          echo "HTTP $code: $(cat /tmp/body)"
+          case "$code" in 2*) exit 0;; *) echo "Keep-alive failed"; exit 1;; esac
