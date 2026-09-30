@@ -236,6 +236,40 @@ nav#nav a[aria-current="page"]{color:var(--accent);font-weight:600}
 .daychips button[aria-pressed="true"]{background:var(--line);color:var(--text)}
 .daychips button.logged::after{content:'';display:inline-block;width:6px;height:6px;border-radius:3px;background:var(--accent);margin-left:6px}
 
+/* ---- add item ---- */
+.sheet.top{z-index:50}
+.capgrid{display:grid;grid-template-columns:3fr 2fr;gap:8px}
+.capcol{display:flex;flex-direction:column;gap:8px}
+.slot{border-radius:10px;border:1px dashed var(--line-soft);background:var(--surface);color:var(--muted);font-size:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;padding:8px;position:relative;overflow:hidden;min-height:118px}
+.capgrid > .slot{aspect-ratio:3/4}
+.capcol .slot{flex:1 1 0}
+.slot .plus{font-size:26px;line-height:1;color:var(--accent)}
+.slot .sub{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.slot.filled{border-style:solid;border-color:var(--line);padding:0}
+.slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.slot .x{position:absolute;top:0;right:0;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:transparent;font-size:0}
+.slot .x::before{content:'×';width:26px;height:26px;border-radius:13px;background:rgba(0,0,0,.62);color:#fff;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center}
+.thumbs{display:flex;gap:8px}
+.thumbs img{width:60px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.banner{border:1px solid var(--warn-line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;background:rgba(224,154,100,.07)}
+.banner .bt{font-weight:600;color:var(--warn)}
+.duprow{display:flex;align-items:center;gap:12px}
+.rcard{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:44px}
+.rcard[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.rcard .rt{font-weight:600;font-size:15px}
+.rcard .rp{font-family:var(--mono);font-size:13px;color:var(--text);flex:0 0 auto}
+.frow{display:flex;flex-direction:column;gap:6px;padding:8px 0}
+.flabel{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.ai{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:1px 5px;border-radius:4px;border:1px solid var(--line-soft);color:var(--accent)}
+.frow.low .input,.frow.low .seg,.frow.low .chips{outline:1.5px solid var(--warn-line);outline-offset:2px;border-radius:8px}
+.frow.need .flabel{color:var(--warn)}
+.frow.need .input{border-color:var(--warn-line);border-style:dashed}
+.seg.c5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.seg.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.seg.c5 button{flex-direction:column;gap:1px;min-height:52px;padding:4px 2px;line-height:1.1}
+.seg.c5 button b{font-size:15px;font-weight:600}
+.seg.c5 button span{font-size:10px;text-align:center}
+
 /* ---- messages ---- */
 #fatal{position:fixed;left:0;right:0;top:0;z-index:100;background:var(--danger);color:#fff;padding:calc(var(--sat) + 14px) 20px 14px;font-size:14px;line-height:1.5}
 #fatal .t{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:4px}
@@ -289,6 +323,7 @@ nav#nav a[aria-current="page"]{color:var(--accent);font-weight:600}
   <a href="#/closet" data-tab="closet">Closet</a>
 </nav>
 <div id="layer"></div>
+<div id="layer2"></div>
 <div id="err" role="alert"></div>
 <div id="toast" role="status"></div>
 <input type="file" id="filepick" accept="image/*" hidden>
@@ -320,7 +355,7 @@ const BUCKET = 'item-photos';
    ------------------------------------------------------------ */
 const state = {
   ready:false, cats:[], catById:new Map(), items:[], itemById:new Map(),
-  outfits:[], trips:[], wear:new Map(),
+  outfits:[], trips:[], teams:[], wear:new Map(),
   closetFilter:null, closetQuery:'', tripTab:'days', tripDay:null, calMonth:null, calFor:null,
   photoCache:new Map(),
 };
@@ -470,14 +505,16 @@ function anchorWarning(itemIds, occ){
 const ITEM_COLS = 'id,name,brand,item_class,category_id,layer,size,unit_price,price_source,purchase_date,retailer,formality,weight,season_tags,colors,swatch_hex,swatch_source,location,photo_ref,photo_source,status,notes,team_id,quantity';
 
 async function loadAll(){
-  const [cats, items, outfits, trips] = await Promise.all([
+  const [cats, items, outfits, trips, teams] = await Promise.all([
     sb.from('categories').select('id,name,parent_id,default_layer,sort_order').order('sort_order'),
     sb.from('items').select(ITEM_COLS).not('status','in','(donated,sold,lost)').order('name'),
     sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,occasion,notes,outfit_items(item_id)').order('worn_on',{ascending:false}).limit(1000),
     sb.from('trips').select('id,name,start_date,end_date,destination,notes,trip_occasions(id,occasion_date,slot,name,dress_code,formality_min,formality_max,excluded_category_ids,notes,occasion_items(item_id,role))').order('start_date'),
+    sb.from('teams').select('id,name,kind,sort_order').order('sort_order').order('name'),
   ]);
-  for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips']]) if (r.error) throw new Error(`${what}: ${r.error.message}`);
+  for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips'],[teams,'teams']]) if (r.error) throw new Error(`${what}: ${r.error.message}`);
   state.cats = cats.data; state.catById = new Map(cats.data.map(c=>[c.id,c]));
+  state.teams = teams.data;
   setItems(items.data);
   setOutfits(outfits.data);
   state.trips = trips.data.map(t => ({...t, trip_occasions:(t.trip_occasions||[]).sort((a,b)=>a.occasion_date.localeCompare(b.occasion_date) || slotOrder(a.slot)-slotOrder(b.slot))}));
@@ -572,32 +609,43 @@ async function processFile(file, maxSide=1600){
     const w = Math.max(1, Math.round(im.naturalWidth*scale)), h = Math.max(1, Math.round(im.naturalHeight*scale));
     const c = document.createElement('canvas'); c.width=w; c.height=h;
     c.getContext('2d').drawImage(im, 0, 0, w, h);
-    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
     if (!blob) throw new Error('could not encode image');
     return { blob, hex: dominantHex(im) };
   } finally { URL.revokeObjectURL(url); }
 }
-/* Dominant colour of the central region, ignoring near-white and near-black
-   background pixels. Falls back to a plain average if everything was skipped. */
+/* Dominant colour of the item. Background-aware: if the four corners agree,
+   that colour is treated as the backdrop and ignored; otherwise near-white and
+   near-black pixels are ignored. Falls back to a plain average when everything
+   was filtered out (e.g. a white shirt on white, or a close-up that fills the frame). */
 function dominantHex(im){
-  const N = 48, c = document.createElement('canvas'); c.width=N; c.height=N;
+  const N = 64, c = document.createElement('canvas'); c.width=N; c.height=N;
   const ctx = c.getContext('2d', {willReadFrequently:true});
-  const W = im.naturalWidth||im.width, H = im.naturalHeight||im.height;
-  const sx = W*0.15, sy = H*0.15, sw = W*0.7, sh = H*0.7;
-  ctx.drawImage(im, sx, sy, sw, sh, 0, 0, N, N);
+  ctx.drawImage(im, 0, 0, N, N);
   const px = ctx.getImageData(0,0,N,N).data;
+  const dist = (r,g,b,q) => Math.hypot(r-q[0], g-q[1], b-q[2]);
+  const K = 6, corners = [[0,0],[N-K,0],[0,N-K],[N-K,N-K]].map(([cx,cy]) => {
+    let r=0,g=0,b=0,n=0;
+    for (let y=cy; y<cy+K; y++) for (let x=cx; x<cx+K; x++){ const i=(y*N+x)*4; if (px[i+3]<128) continue; r+=px[i]; g+=px[i+1]; b+=px[i+2]; n++; }
+    return n ? [r/n, g/n, b/n] : null;
+  }).filter(Boolean);
+  let bg = null;
+  if (corners.length >= 3){
+    const mean = [0,1,2].map(i => corners.reduce((s,q)=>s+q[i],0) / corners.length);
+    if (corners.every(q => dist(q[0],q[1],q[2],mean) < 28)) bg = mean;
+  }
+  const lo = Math.round(N*0.15), hi = Math.round(N*0.85);
   const buckets = new Map(); let fr=0,fg=0,fb=0,fn=0;
-  for (let i=0;i<px.length;i+=4){
-    const r=px[i],g=px[i+1],b=px[i+2],a=px[i+3]; if (a<128) continue;
+  for (let y=lo; y<hi; y++) for (let x=lo; x<hi; x++){
+    const i=(y*N+x)*4, r=px[i], g=px[i+1], b=px[i+2]; if (px[i+3]<128) continue;
     fr+=r; fg+=g; fb+=b; fn++;
-    const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
-    if (mx>238 && mn>222) continue;   // near-white
-    if (mx<30) continue;              // near-black
+    if (bg){ if (dist(r,g,b,bg) < 42) continue; }
+    else { const mx=Math.max(r,g,b), mn=Math.min(r,g,b); if ((mx>238 && mn>222) || mx<30) continue; }
     const key = ((r>>4)<<8)|((g>>4)<<4)|(b>>4);
     const k = buckets.get(key) || {r:0,g:0,b:0,n:0}; k.r+=r;k.g+=g;k.b+=b;k.n++; buckets.set(key,k);
   }
   let best=null; for (const k of buckets.values()) if (!best || k.n>best.n) best=k;
-  if (!best){ if (!fn) return null; best={r:fr,g:fg,b:fb,n:fn}; }
+  if (!best || best.n < 12){ if (!fn) return null; best={r:fr,g:fg,b:fb,n:fn}; }
   const hx = v => pad(Math.round(v).toString(16).toUpperCase(),2);
   return '#' + hx(best.r/best.n) + hx(best.g/best.n) + hx(best.b/best.n);
 }
@@ -606,9 +654,10 @@ async function uploadBlob(path, blob, upsert=false){
   const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert, cacheControl:'3600' });
   if (error) throw error; return path;
 }
-function pickFile(){
+function pickFile(camera=false){
   return new Promise(res => {
     const inp = $('#filepick'); inp.value = '';
+    if (camera) inp.setAttribute('capture', 'environment'); else inp.removeAttribute('capture');
     inp.onchange = () => res(inp.files && inp.files[0] ? inp.files[0] : null);
     inp.click();
   });
@@ -831,7 +880,7 @@ function drawPicker(){
       ${suggPossible.length ? `<div class="lbl grouphead">Possible · partly hidden</div><div class="rows">${suggPossible.map(s=>itemRowHTML(s.it,{check:p.picked.has(s.it.id), end:{text:s.why}})).join('')}</div>` : ''}
       ${recent.length ? `<div class="lbl grouphead">Worn lately</div><div class="rows">${rowsHTML(recent.filter(i=>!shownIds.has(i.id)))}</div>` : ''}
       ${rest.map(g=>`<div class="lbl grouphead">${esc(g.label)} · ${g.items.length}</div><div class="rows">${rowsHTML(g.items.filter(i=>!shownIds.has(i.id)))}</div>`).join('')}
-      ${!list.length && !p.loading ? '<div class="empty">Nothing matches.</div>' : ''}
+      ${!list.length && !p.loading ? `<div class="empty">Nothing matches${p.query.trim()?` “${esc(p.query.trim())}”`:''}.</div><button type="button" class="btn outline" id="pk-additem">+ Add item</button>` : ''}
       ${hiddenCount ? `<button class="btn dashed" id="pk-showall" style="margin-top:16px">Show ${hiddenCount} hidden by the dress code / storage</button>` : ''}
     </div>
     <div class="sheet-foot">
@@ -868,6 +917,7 @@ function bindPickerBody(){
     if (picker.mode==='plan'){ drawPickerBody(); }
   });
   $('#pk-showall')?.addEventListener('click', ()=>{ picker.showAll=true; drawPickerBody(); });
+  $('#pk-additem')?.addEventListener('click', ()=>openAdder({fromPicker:true, hintName:picker.query.trim()}));
 }
 async function savePicker(){
   const p = picker; if (!p || !p.picked.size) return;
@@ -1023,7 +1073,7 @@ function closetHTML(){
     body = grouped(list).map(g=>`<div class="lbl grouphead">${esc(g.label)} · ${g.items.length}</div><div class="rows">${g.items.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`, end:priceText(i)})).join('')}</div>`).join('') || '<div class="empty">Nothing matches.</div>';
   }
   return `<div class="stack" style="gap:14px">
-    <div class="between"><h1 class="sm">Closet</h1><span class="mono">${all.length} ITEMS</span></div>
+    <div class="between" style="align-items:center"><h1 class="sm">Closet</h1><span style="display:flex;align-items:center;gap:12px"><span class="mono">${all.length} ITEMS</span><button type="button" class="btn outline" id="cl-add" style="padding:0 14px">+ Item</button></span></div>
     <input type="search" class="input" id="cl-q" placeholder="Search your closet" value="${esc(state.closetQuery)}" autocomplete="off" autocorrect="off" autocapitalize="off">
     <div class="stack tight" style="gap:8px"><div class="lbl">Needs attention</div>
       <div class="counters">${Object.entries(GAPS).map(([k,g])=>`<button type="button" data-f="${k}" aria-pressed="${f===k}"><b>${all.filter(g.test).length}</b><span>${g.label}</span></button>`).join('')}</div>
@@ -1032,6 +1082,7 @@ function closetHTML(){
   </div>`;
 }
 function bindCloset(){
+  $('#cl-add').onclick = () => openAdder();
   $$('.counters button').forEach(b => b.onclick = () => { state.closetFilter = state.closetFilter===b.dataset.f ? null : b.dataset.f; render(); });
   const q = $('#cl-q');
   q.oninput = () => { state.closetQuery = q.value; const pos=q.selectionStart; render(); const q2=$('#cl-q'); q2.focus(); try{q2.setSelectionRange(pos,pos);}catch{} };
@@ -1198,6 +1249,327 @@ function bindItem(it){
       catch(e){ fail('save', e); sb_.disabled=false; sb_.textContent='Save'; }
     };
     const ed=$('#ed'); if (ed && ed.tagName==='INPUT') ed.onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); er.querySelector('[data-save]').click(); } };
+  }
+}
+
+/* ------------------------------------------------------------
+   ADD ITEM: photo(s) → identify-item (returns a draft, writes nothing)
+   → review form → save. Nothing is saved until Joe taps Save.
+   ------------------------------------------------------------ */
+const IDENTIFY_URL = CFG.url + '/functions/v1/identify-item';
+const FORMALITY_SHORT = {1:'lounge',2:'casual',3:'smart casual',4:'cocktail',5:'suit'};
+const money = v => { const n = Number(v); return '$' + (Number.isInteger(n) ? n : n.toFixed(2)); };
+const nz = v => { const s = String(v ?? '').trim(); return s === '' ? null : s; };
+let adder = null;
+
+function openAdder(opts={}){
+  adder = { step:'capture', item:null, labels:[], draft:null, receipts:[], duplicates:[], dupDismissed:false,
+            receiptId:null, form:null, ai:{}, error:null, abort:null, timer:null, busy:false, saved:null,
+            fromPicker:!!opts.fromPicker, hintName:opts.hintName||'' };
+  drawAdder();
+  window.visualViewport?.addEventListener('resize', fitAdder);
+  window.visualViewport?.addEventListener('scroll', fitAdder);
+}
+function closeAdder(){
+  if (!adder) return;
+  adder.abort?.abort(); clearInterval(adder.timer);
+  for (const p of [adder.item, ...adder.labels]) if (p?.url) URL.revokeObjectURL(p.url);
+  adder = null; $('#layer2').innerHTML = '';
+  window.visualViewport?.removeEventListener('resize', fitAdder);
+  window.visualViewport?.removeEventListener('scroll', fitAdder);
+}
+/* Keep the sheet, and its Save bar, inside the visible viewport while the keyboard is up. */
+function fitAdder(){
+  const s = $('#layer2 .sheet'), vv = window.visualViewport; if (!s || !vv) return;
+  s.style.height = vv.height + 'px'; s.style.top = vv.offsetTop + 'px'; s.style.bottom = 'auto';
+}
+function blobToB64(blob){
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = () => rej(r.error || new Error('could not read the image')); r.readAsDataURL(blob); });
+}
+function initAdderForm(resp){
+  const a = adder, d = resp?.draft || null;
+  a.draft = d; a.receipts = resp?.receipts || []; a.duplicates = resp?.duplicates || []; a.dupDismissed = false; a.receiptId = null; a.ai = {};
+  const cat = d && state.catById.has(Number(d.category_id)) ? Number(d.category_id) : '';
+  const team = d && state.teams.some(t => t.id === Number(d.team_id)) ? Number(d.team_id) : '';
+  const notes = d ? [d.description, d.style_code ? `Style code: ${d.style_code}` : null].filter(Boolean).join('\n') : '';
+  a.form = {
+    name: d?.name || a.hintName || '', brand: d?.brand || '', colour: d?.colour_name || '', category_id: cat,
+    size: d?.size || '', material: d?.material || '', team_id: team,
+    formality: d && d.formality >= 1 && d.formality <= 5 ? Number(d.formality) : null,
+    weight: d && ['light','mid','heavy'].includes(d.weight) ? d.weight : null,
+    season_tags: d ? (d.season_tags || []).map(s => String(s).toLowerCase()).filter(s => SEASONS.includes(s)) : [],
+    unit_price:'', purchase_date:'', retailer:'', location:'', notes,
+  };
+  if (d){
+    // only fields Claude actually filled get a marker; nulls stay empty for Joe
+    const conf = d.confidence || {};
+    const src = { name:'name', brand:'brand', colour:'colour_name', category_id:'category_id', size:'size', material:'material', team_id:'team_id', formality:'formality', weight:'weight', season_tags:'season_tags', notes:'description' };
+    for (const [k, dk] of Object.entries(src)){
+      const v = a.form[k]; const filled = Array.isArray(v) ? v.length > 0 : (v !== '' && v != null);
+      if (filled) a.ai[k] = conf[dk] || (k === 'colour' ? conf.colors : null) || 'medium';
+    }
+  }
+}
+async function identifyAdder(){
+  const a = adder; if (!a?.item) return;
+  a.step = 'loading'; a.error = null; a.abort = new AbortController(); a.t0 = Date.now(); drawAdder();
+  try {
+    const { data:{ session } } = await sb.auth.getSession();
+    if (!session) throw new Error('not signed in');
+    const images = [];
+    for (const p of [a.item, ...a.labels]) images.push({ media_type:'image/jpeg', data: await blobToB64(p.blob) });
+    const r = await fetch(IDENTIFY_URL, { method:'POST', signal:a.abort.signal,
+      headers:{ 'Content-Type':'application/json', apikey:CFG.key, Authorization:`Bearer ${session.access_token}` },
+      body: JSON.stringify({ images }) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error || `identify failed (HTTP ${r.status})`);
+    if (adder !== a) return;
+    initAdderForm(j);
+  } catch (e) {
+    if (adder !== a) return;
+    clearInterval(a.timer);
+    if (e.name === 'AbortError'){ a.step = 'capture'; drawAdder(); return; }
+    initAdderForm(null);
+    a.error = e instanceof TypeError ? `Could not reach the identify service (${e.message}). Check the connection.` : ((e && e.message) || String(e));
+  }
+  clearInterval(a.timer); a.step = 'form'; drawAdder();
+}
+async function takeAdderPhoto(slot, camera){
+  const file = await pickFile(camera); if (!file || !adder) return;
+  try {
+    const p = await processFile(file, 1600);
+    const o = { blob:p.blob, hex:p.hex, url:URL.createObjectURL(p.blob) };
+    if (slot === 'item'){ if (adder.item?.url) URL.revokeObjectURL(adder.item.url); adder.item = o; }
+    else if (adder.labels.length < 2) adder.labels.push(o);
+    drawAdder();
+  } catch (e) { fail('read that photo', e); }
+}
+function readAdderForm(){
+  const f = adder?.form; if (!f) return;
+  for (const k of ['name','brand','colour','category_id','size','material','team_id','unit_price','purchase_date','retailer','location','notes']){
+    const el = $('#af-' + k); if (el) f[k] = el.value;
+  }
+}
+const ADDER_NEED = ['size','unit_price','location'];
+
+function adderFormHTML(){
+  const a = adder, f = a.form;
+  const ai = k => a.ai[k] ? '<span class="ai">AI</span>' : '';
+  const need = k => ADDER_NEED.includes(k) && !String(f[k] ?? '').trim();
+  const row = (k, label, inner) => `<div class="frow ${a.ai[k]==='low'?'low':''} ${need(k)?'need':''}" data-k="${k}"><label class="flabel" for="af-${k}">${esc(label)}${ai(k)}</label>${inner}</div>`;
+  const text = (k, ph='', attrs='') => `<input class="input" id="af-${k}" type="text" value="${esc(f[k] ?? '')}" placeholder="${esc(ph)}" autocomplete="off" ${attrs}>`;
+  const parents = state.cats.filter(c => !c.parent_id);
+  const blocked = a.duplicates.length && !a.dupDismissed;
+
+  const thumbs = `<div class="thumbs">${[a.item, ...a.labels].map((p,i)=>`<img src="${esc(p.url)}" alt="${i?'Label':'Item'} photo">`).join('')}</div>`;
+  const errBanner = a.error ? `<div class="banner"><div class="bt">Couldn't read the photo</div><div class="small">${esc(a.error)}</div><div class="small muted">Fill it in by hand. Your photo is kept and saving still works.</div></div>` : '';
+  const dupBanner = blocked ? `<div class="banner" id="ad-dups"><div class="bt">Possibly already in your closet</div>
+    ${a.duplicates.map(d => { const it = state.itemById.get(d.id); return `<div class="duprow">${it ? swatchHTML(it) : '<span class="sw"></span>'}<span class="rowmain"><span class="name">${esc(d.name)}</span><span class="brand">${esc([d.brand, d.size].filter(Boolean).join(' · '))}</span></span></div>
+      <div class="btn-row"><button type="button" class="btn small" data-dup-open="${d.id}">Open it</button><button type="button" class="btn small" data-dup-photo="${d.id}">Add this photo to it</button></div>`; }).join('')}
+    <button type="button" class="btn warn" id="ad-dup-dismiss">Create new anyway</button></div>` : '';
+  const receipts = a.receipts.length ? `<div class="stack tight" style="gap:8px"><div class="lbl">Receipt match</div>
+    ${a.receipts.map(r => `<button type="button" class="rcard" data-receipt="${r.id}" aria-pressed="${a.receiptId===r.id}">
+      <span class="between"><span class="rt">${esc(r.retailer || 'Receipt')}</span><span class="rp">${r.unit_price != null ? money(r.unit_price) : ''}</span></span>
+      <span class="name">${esc(r.item_description || '')}</span>
+      <span class="brand">${r.order_date ? esc(fmtShort(r.order_date) + ' ' + r.order_date.slice(0,4)) : 'no date'}${r.strong_hit ? ' · brand or style match' : ''}</span></button>`).join('')}
+    <button type="button" class="btn small" id="ad-receipt-none" ${a.receiptId ? '' : 'disabled'}>None of these</button></div>` : '';
+
+  const fields = [
+    row('name', 'Name', text('name', 'Product name — colour')),
+    row('brand', 'Brand', text('brand')),
+    row('colour', 'Colour', text('colour')),
+    row('category_id', 'Category', `<select class="input" id="af-category_id"><option value="">Choose…</option>${parents.map(p => `<optgroup label="${esc(p.name)}">${state.cats.filter(c => c.parent_id === p.id).map(c => `<option value="${c.id}" ${Number(f.category_id)===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>`).join('')}</select>`),
+    row('size', 'Size', text('size', 'e.g. M, 32x30, US 12', 'autocapitalize="characters"')),
+    row('material', 'Material', text('material')),
+    row('team_id', 'Team / band', `<select class="input" id="af-team_id"><option value="">None</option>${state.teams.map(t => `<option value="${t.id}" ${Number(f.team_id)===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`),
+    row('formality', 'Formality', `<div class="seg c5" id="af-formality">${[1,2,3,4,5].map(n => `<button type="button" data-v="${n}" aria-pressed="${f.formality===n}"><b>${n}</b><span>${FORMALITY_SHORT[n]}</span></button>`).join('')}</div>`),
+    row('weight', 'Weight', `<div class="seg c3" id="af-weight">${['light','mid','heavy'].map(v => `<button type="button" data-v="${v}" aria-pressed="${f.weight===v}">${cap(v)}</button>`).join('')}</div>`),
+    row('season_tags', 'Seasons', `<div class="chips" id="af-season_tags" style="justify-content:flex-start">${SEASONS.map(s => `<button type="button" class="chip" data-v="${s}" aria-pressed="${f.season_tags.includes(s)}">${cap(s)}</button>`).join('')}</div>`),
+    row('unit_price', 'Price', `<input class="input" id="af-unit_price" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(f.unit_price ?? '')}" placeholder="What you paid, or leave blank">`),
+    row('purchase_date', 'Bought', `<input class="input" id="af-purchase_date" type="date" value="${esc(f.purchase_date ?? '')}">`),
+    row('retailer', 'Retailer', text('retailer', 'Shop or site')),
+    row('location', 'Where it lives', `<select class="input" id="af-location"><option value="">At home, spot unknown</option>${LOCATIONS.map(l => `<option ${f.location===l?'selected':''}>${l}</option>`).join('')}</select>`),
+    row('notes', 'Notes', `<textarea class="input" id="af-notes" placeholder="Nicknames, fit notes, anything searchable">${esc(f.notes ?? '')}</textarea>`),
+  ].join('');
+
+  const s = a.saved;
+  const hint = blocked ? 'Check the possible duplicates above first'
+    : s?.failed ? `Saved as ${tagFor(s.row)}, but could not ${s.failed}. Retry finishes it.`
+    : 'Nothing is saved until you tap Save';
+  return `<div class="sheet-body" id="ad-body" style="padding-top:14px"><div class="stack" style="gap:14px">${thumbs}${errBanner}${dupBanner}${receipts}<div>${fields}</div></div></div>
+    <div class="sheet-foot"><div class="tally small ${s?.failed?'':'muted'}" id="ad-hint" ${s?.failed?'style="color:var(--warn)"':''}>${esc(hint)}</div><button class="btn primary" id="ad-save" ${blocked?'disabled':''}>${s?.id ? 'Retry' : 'Save'}</button></div>`;
+}
+function drawAdder(){
+  const a = adder; if (!a) return;
+  const keepScroll = $('#ad-body')?.scrollTop || 0;
+  const head = `<div class="sheet-head"><div class="between" style="align-items:center"><button type="button" class="linkbtn" id="ad-cancel" style="padding-left:0">${a.saved?.id ? 'Close' : 'Cancel'}</button><span class="lbl">${a.step==='form' ? 'New item' : 'Add item'}</span></div></div>`;
+  let body;
+  if (a.step === 'capture'){
+    const slot = (p, id, label, sub) => p
+      ? `<div class="slot filled"><img src="${esc(p.url)}" alt="${esc(label)}"><button type="button" class="x" data-remove="${id}" aria-label="Remove ${esc(label)}">×</button></div>`
+      : `<button type="button" class="slot" data-slot="${id}"><span class="plus">+</span><span>${esc(label)}</span><span class="sub">${esc(sub)}</span></button>`;
+    body = `<div class="sheet-body" style="padding-top:16px"><div class="stack">
+      <div class="capgrid">${slot(a.item, 'item', 'Item photo', 'required')}<div class="capcol">${slot(a.labels[0], 'label0', 'Label', 'optional')}${slot(a.labels[1], 'label1', 'Second label', 'optional')}</div></div>
+      <button type="button" class="linkbtn" id="ad-library" style="padding-left:0">${a.item ? 'Replace the item photo from your library' : 'Or choose the item photo from your library'}</button>
+      <div class="hint">Item first. Add the label or tag if you have it: that's where brand, size and fabric come from.</div>
+      <button type="button" class="btn primary big" id="ad-identify" ${a.item ? '' : 'disabled'}>Identify</button>
+      <button type="button" class="btn" id="ad-manual" ${a.item ? '' : 'disabled'}>Fill in by hand</button>
+    </div></div>`;
+  } else if (a.step === 'loading'){
+    body = `<div class="sheet-body"><div class="stack" style="align-items:center;text-align:center;padding-top:64px">
+      <img src="${esc(a.item.url)}" alt="" style="width:132px;height:176px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
+      <div style="font-size:20px;font-weight:600">Reading the photo…</div>
+      <div class="hint">Usually under ten seconds. <span id="ad-secs"></span></div>
+      <button type="button" class="btn" id="ad-stop">Stop and go back</button>
+    </div></div>`;
+  } else body = adderFormHTML();
+  $('#layer2').innerHTML = `<div class="sheet top" role="dialog" aria-label="Add item">${head}${body}</div>`;
+  fitAdder();
+  if ($('#ad-body')) $('#ad-body').scrollTop = keepScroll;
+  bindAdder();
+}
+function bindAdder(){
+  const a = adder;
+  $('#ad-cancel').onclick = () => {
+    if (a.step === 'form' && !a.saved?.id && !confirm('Discard this new item?')) return;
+    const savedId = a.saved?.id; closeAdder(); if (savedId){ itemUI.id = null; go(`#/item/${savedId}`); }
+  };
+  if (a.step === 'capture'){
+    $$('#layer2 [data-slot]').forEach(b => b.onclick = () => takeAdderPhoto(b.dataset.slot === 'item' ? 'item' : 'label', true));
+    $$('#layer2 [data-remove]').forEach(b => b.onclick = () => {
+      if (b.dataset.remove === 'item'){ URL.revokeObjectURL(a.item.url); a.item = null; }
+      else { const i = Number(b.dataset.remove.slice(5)); URL.revokeObjectURL(a.labels[i].url); a.labels.splice(i, 1); }
+      drawAdder();
+    });
+    $('#ad-library').onclick = () => takeAdderPhoto('item', false);
+    $('#ad-identify').onclick = identifyAdder;
+    $('#ad-manual').onclick = () => { initAdderForm(null); a.step = 'form'; drawAdder(); };
+    return;
+  }
+  if (a.step === 'loading'){
+    const tick = () => { const el = $('#ad-secs'); if (el) el.textContent = Math.round((Date.now() - a.t0) / 1000) + ' s'; };
+    clearInterval(a.timer); a.timer = setInterval(tick, 1000); tick();
+    $('#ad-stop').onclick = () => a.abort?.abort();
+    return;
+  }
+  // ---- form
+  const f = a.form;
+  const touched = k => { delete a.ai[k]; const r = $(`#layer2 .frow[data-k="${k}"]`); if (!r) return; r.classList.remove('low'); r.querySelector('.ai')?.remove(); if (ADDER_NEED.includes(k)) r.classList.toggle('need', !String(f[k] ?? '').trim()); };
+  $$('#layer2 .frow .input').forEach(el => {
+    const k = el.id.slice(3);
+    const on = () => { f[k] = el.value; touched(k); };
+    el.addEventListener('input', on); el.addEventListener('change', on);
+    el.addEventListener('focus', () => setTimeout(() => el.scrollIntoView({ block:'center', behavior:'smooth' }), 280));
+  });
+  for (const k of ['formality','weight']) $$(`#af-${k} button`).forEach(b => b.onclick = () => {
+    f[k] = k === 'formality' ? Number(b.dataset.v) : b.dataset.v;
+    $$(`#af-${k} button`).forEach(x => x.setAttribute('aria-pressed', x === b)); touched(k);
+  });
+  $$('#af-season_tags .chip').forEach(c => c.onclick = () => {
+    const v = c.dataset.v; f.season_tags = f.season_tags.includes(v) ? f.season_tags.filter(s => s !== v) : [...f.season_tags, v];
+    c.setAttribute('aria-pressed', f.season_tags.includes(v)); touched('season_tags');
+  });
+  $('#ad-dup-dismiss')?.addEventListener('click', () => { readAdderForm(); a.dupDismissed = true; drawAdder(); });
+  $$('#layer2 [data-dup-open]').forEach(b => b.onclick = () => {
+    if (!confirm('Discard this new item and open the existing one?')) return;
+    const id = Number(b.dataset.dupOpen); closeAdder(); if (picker) closePicker(); itemUI.id = null; go(`#/item/${id}`);
+  });
+  $$('#layer2 [data-dup-photo]').forEach(b => b.onclick = () => addPhotoToExisting(Number(b.dataset.dupPhoto), b));
+  $$('#layer2 [data-receipt]').forEach(b => b.onclick = () => {
+    readAdderForm(); const r = a.receipts.find(x => x.id === Number(b.dataset.receipt)); if (!r) return;
+    a.receiptId = r.id;
+    f.unit_price = r.unit_price != null ? String(r.unit_price) : ''; f.purchase_date = r.order_date || ''; f.retailer = r.retailer || '';
+    drawAdder();
+  });
+  $('#ad-receipt-none')?.addEventListener('click', () => {
+    readAdderForm(); const r = a.receipts.find(x => x.id === a.receiptId); a.receiptId = null;
+    if (r){ // clear only what the receipt filled in
+      if (Number(f.unit_price) === Number(r.unit_price)) f.unit_price = '';
+      if (f.purchase_date === (r.order_date || '')) f.purchase_date = '';
+      if (f.retailer === (r.retailer || '')) f.retailer = '';
+    }
+    drawAdder();
+  });
+  $('#ad-save').onclick = saveAdder;
+}
+async function addPhotoToExisting(id, btn){
+  const a = adder, it = state.itemById.get(id);
+  if (!it) return toast('That item is not loaded here');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  try {
+    const path = `${photoPrefix(it)}${slug(it.name)}-own-${stamp()}.jpg`;
+    await uploadBlob(path, a.item.blob, false);
+    if (!it.photo_ref){
+      const patch = { photo_ref:path, photo_source:'own_photo' };
+      if (a.item.hex) Object.assign(patch, { swatch_hex:a.item.hex, swatch_source:'photo' });
+      await updateItem(id, patch);
+    }
+    closeAdder(); if (picker) closePicker(); itemUI.id = null; toast('Photo added to the existing item');
+    if (location.hash === `#/item/${id}`) render(); else go(`#/item/${id}`);
+  } catch (e) { fail('add the photo', e); btn.disabled = false; btn.textContent = 'Add this photo to it'; }
+}
+/* Save runs in order and is resumable: if a step fails, the hint names it and Retry picks up there. */
+async function saveAdder(){
+  const a = adder; if (!a || a.busy) return;
+  readAdderForm(); const f = a.form;
+  if (!String(f.name).trim()){ toast('Give it a name first'); $('#af-name')?.focus(); return; }
+  const priceStr = String(f.unit_price ?? '').trim(), price = priceStr === '' ? null : Number(priceStr);
+  if (price !== null && !(price >= 0)){ toast('Price must be a number'); $('#af-unit_price')?.focus(); return; }
+  a.busy = true; const btn = $('#ad-save'); btn.disabled = true; btn.textContent = 'Saving…';
+  const s = a.saved || (a.saved = { id:null, row:null, done:{}, labels:{}, failed:null });
+  let step = '';
+  try {
+    if (!s.id){
+      step = 'create the item';
+      const cat = state.catById.get(Number(f.category_id)) || null;
+      const parent = cat ? (cat.parent_id ? state.catById.get(cat.parent_id) : cat) : null;
+      const rec = a.receipts.find(r => r.id === a.receiptId) || null;
+      const colour = String(f.colour || '').trim();
+      const row = {
+        name: f.name.trim(), brand: nz(f.brand),
+        colors: !colour ? [] : (a.draft && colour === a.draft.colour_name && a.draft.colors?.length ? a.draft.colors : [colour.toLowerCase()]),
+        category_id: cat ? cat.id : null, layer: cat?.default_layer || a.draft?.layer || null,
+        size: nz(f.size), material: nz(f.material), team_id: f.team_id ? Number(f.team_id) : null,
+        formality: f.formality || null, weight: f.weight || null, season_tags: f.season_tags || [],
+        unit_price: price,
+        // receipt price, or what Joe typed, or nothing. Never an estimate.
+        price_source: price === null ? 'unknown' : (rec && Number(rec.unit_price) === price ? 'receipt' : 'manual'),
+        purchase_date: f.purchase_date || null, retailer: nz(f.retailer), location: f.location || null, notes: nz(f.notes),
+        item_class: parent?.name === 'Collection' ? 'collectible' : parent?.name === 'Property' ? 'property' : 'wardrobe',
+        status:'active', source:'app', acquired_how: (rec || price !== null) ? 'bought' : 'unknown', photo_source:'none',
+      };
+      const { data, error } = await sb.from('items').insert(row).select(ITEM_COLS).single();
+      if (error) throw error;
+      s.id = data.id; s.row = data; setItems([...state.items, data]);
+    }
+    const base = `${photoPrefix(s.row)}${slug(s.row.name)}`;
+    if (!s.done.photo){
+      step = 'upload the item photo';
+      s.photoPath = s.photoPath || `${base}-own-${stamp()}.jpg`;
+      await uploadBlob(s.photoPath, a.item.blob, true); s.done.photo = true;
+    }
+    for (let i = 0; i < a.labels.length; i++){
+      if (s.labels[i]) continue;
+      step = 'upload the label photo';
+      await uploadBlob(`${base}-label-${stamp()}${i}.jpg`, a.labels[i].blob, true); s.labels[i] = true;
+    }
+    if (!s.done.cover){
+      step = 'set the cover and colour';
+      const patch = { photo_ref:s.photoPath, photo_source:'own_photo' };
+      if (a.item.hex) Object.assign(patch, { swatch_hex:a.item.hex, swatch_source:'photo' });
+      s.row = await updateItem(s.id, patch); s.done.cover = true;
+    }
+    if (a.receiptId && !s.done.receipt){
+      step = 'link the receipt';
+      const { error } = await sb.from('acquisitions').update({ matched_item_id:s.id }).eq('id', a.receiptId).is('matched_item_id', null);
+      if (error) throw error; s.done.receipt = true;
+    }
+    const id = s.id, tag = tagFor(s.row), fromPicker = a.fromPicker;
+    closeAdder(); itemUI.id = null; toast(`Added — ${tag}`);
+    if (fromPicker && picker){ picker.picked.add(id); picker.query = ''; drawPicker(); }
+    else if (location.hash === `#/item/${id}`) render(); else go(`#/item/${id}`);
+  } catch (e) {
+    a.busy = false; s.failed = step; drawAdder(); fail(step, e);
   }
 }
 

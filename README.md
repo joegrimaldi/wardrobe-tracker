@@ -15,6 +15,7 @@ Phone-first outfit log. One static page (`index.html`) on GitHub Pages, data in 
 - Prices: receipt/manual `$X`, estimate `~$X`, null "no price".
 - Pack-list ticks live in `localStorage` (`pack:<trip_id>`), per device, by design.
 - Photos are never deleted from the bucket; changing the cover repoints `items.photo_ref` and re-samples `swatch_hex` (`swatch_source = 'photo'`).
+- Adding an item (`+ Item` on Closet, `+ Add item` when a picker search finds nothing): photo(s) are resized to 1600 px JPEG and sent to the `identify-item` Edge Function, which returns a draft and writes nothing. Joe reviews a prefilled form; nothing is saved until Save. The app never writes `price_source = 'estimate'`: price is a receipt's, typed (`manual`), or blank. Save is ordered and resumable (insert → item photo → labels → cover + swatch → receipt link). `identify-item` only accepts calls from the live origin (CORS), so it cannot be exercised from localhost.
 - Selfie recognition is a seam only: `suggestItemsFromPhoto()` returns nothing until an Edge Function with an Anthropic key exists.
 
 ## Storage layout (`item-photos` bucket)
