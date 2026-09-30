@@ -58,6 +58,9 @@ a{color:var(--accent);text-decoration:none}
 .lbl{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .lbl.accent{color:var(--accent)}
 .lbl.warn{color:var(--warn)}
+.datelbl{display:flex;align-items:center;gap:4px;min-height:44px}
+.datelbl input{background:none;border:0;padding:0;color:var(--muted);font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;-webkit-appearance:none;appearance:none;color-scheme:dark;min-height:44px;text-align:right}
+.datelbl input::-webkit-calendar-picker-indicator{opacity:.6}
 .mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
 .brand{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block}
 h1{margin:0;font-size:30px;font-weight:600;line-height:1.15;overflow-wrap:anywhere}
@@ -316,7 +319,16 @@ const state = {
    Small helpers
    ------------------------------------------------------------ */
 const pad = (n, w=2) => String(n).padStart(w, '0');
-function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+/* The day rolls over at DAY_ROLLOVER local time, not midnight: anything logged
+   or viewed before it belongs to the previous calendar day. Phone-local time,
+   so it follows Joe to Athens. Every "today" in the app comes from todayISO(). */
+const DAY_ROLLOVER = '03:33';
+function now(){ return new Date(); }
+function todayISO(){
+  const [h, m] = DAY_ROLLOVER.split(':').map(Number);
+  const d = now(); d.setMinutes(d.getMinutes() - (h*60 + m));
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
 function parseISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y, m-1, d); }
 function addDays(iso, n){ const d=parseISO(iso); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function daysBetween(a, b){ return Math.round((parseISO(b)-parseISO(a))/86400000); }
@@ -398,7 +410,7 @@ function kindOfPhoto(name, it){
   return it && it.photo_source === 'retailer' ? 'RETAIL' : 'OWN';
 }
 function slug(s){ return String(s||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32) || 'item'; }
-function stamp(){ const d=new Date(); return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}t${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; }
+function stamp(){ const d=now(); return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}t${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; }
 
 /* ---- trips ---- */
 function currentTrip(){
@@ -769,7 +781,7 @@ function drawPicker(){
     <div class="sheet-head">
       <div class="between" style="align-items:center">
         <button class="linkbtn" id="pk-cancel" style="padding-left:0">Cancel</button>
-        <span class="lbl">${title}</span>
+        ${isPlan ? `<span class="lbl">${title}</span>` : `<label class="lbl datelbl">${p.trip?esc(tripShort(p.trip))+' · ':''}<input type="date" id="pk-date" value="${esc(p.date)}" aria-label="Date"></label>`}
       </div>
       ${isPlan ? `<div><div style="font-weight:600">${esc(p.occasion?.name||'')}</div>${p.occasion?.dress_code?`<div class="small muted">${esc(p.occasion.dress_code)}${p.occasion.formality_min?` · formality ${p.occasion.formality_min}${p.occasion.formality_max&&p.occasion.formality_max!==p.occasion.formality_min?'–'+p.occasion.formality_max:''}`:''}</div>`:''}</div>`
       : `<div class="seg c4" role="radiogroup" aria-label="Slot">${PICK_SLOTS.map(s=>`<button type="button" data-slot="${s}" aria-pressed="${p.slot===s}">${SLOT[s]}</button>`).join('')}</div>`}
@@ -794,6 +806,11 @@ function drawPicker(){
   $('#pk-cancel').onclick = closePicker;
   const q = $('#pk-q');
   q.oninput = () => { const pos=q.selectionStart; p.query = q.value; drawPickerBody(); };
+  const dateInp = $('#pk-date');
+  if (dateInp) dateInp.onchange = async () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInp.value) || dateInp.value===p.date) return;
+    p.date = dateInp.value; p.prefilled=false; p.loading=true; drawPicker(); await loadPickerExisting();
+  };
   $$('#layer .seg button').forEach(b => b.onclick = async () => { if (p.slot===b.dataset.slot) return; p.slot=b.dataset.slot; p.prefilled=false; p.loading=true; drawPicker(); await loadPickerExisting(); });
   bindPickerBody();
   $('#pk-save').onclick = savePicker;

@@ -8,6 +8,7 @@ Phone-first outfit log. One static page (`index.html`) on GitHub Pages, data in 
 
 ## Rules the code follows
 - Logging must take under 15 seconds. No ratings, no required fields.
+- The day rolls over at 03:33 phone-local time (`DAY_ROLLOVER` in `index.html`), not midnight. Everything the app calls "today" comes from `todayISO()`; the picker's date control still allows any date.
 - The existing outfit for a date/slot is **always fetched before showing or saving** (`fetchOutfit`). Saving replaces the item list; an empty list is never saved.
 - Wear counts, last-worn and cost-per-wear are derived from `outfit_items`, never stored.
 - `occasion_items` is the plan; it is never counted as a wear.
