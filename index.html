@@ -208,6 +208,10 @@ nav#nav a[aria-current="page"]{color:var(--accent);font-weight:600}
 .field.gap .k{color:var(--warn)}
 .field .v{font-size:15px;text-align:right;display:flex;align-items:center;gap:8px;justify-content:flex-end;overflow-wrap:anywhere}
 .field .v .sw{width:18px;height:18px;border-radius:4px}
+.field .v{flex:1 1 auto}
+.field .chev{flex:0 0 auto;color:#A19E95;font-size:20px;line-height:1;padding-left:2px}
+.field.notesrow{align-items:flex-start;padding:12px 0;border-bottom:0}
+.field.notesrow .notes{flex:1 1 auto;text-align:left}
 .editrow{display:flex;flex-direction:column;gap:10px;padding:10px 0 14px;border-bottom:1px solid var(--row)}
 .editrow .actions{display:flex;gap:8px;justify-content:flex-end}
 .chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
@@ -346,6 +350,10 @@ const SEASONS = ['spring','summer','fall','winter'];
 const PREFIX = { wardrobe:'WD', collectible:'CL', property:'PR' };
 const tagFor = it => (PREFIX[it.item_class]||'WD') + '-' + pad(it.id,3);
 const cap = s => s ? s[0].toUpperCase()+s.slice(1) : '';
+/* Alphabetical lists sort on a key that drops leading quotes/punctuation and case,
+   so "Late Show" files under L. Display names are untouched. */
+const sortKey = s => String(s ?? '').replace(/^[^\p{L}\p{N}]+/u, '').toLowerCase();
+const byName = (a, b) => sortKey(a.name).localeCompare(sortKey(b.name), undefined, {numeric:true, sensitivity:'base'}) || a.id - b.id;
 
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'), 2200); }
 function fail(where, e){
@@ -382,7 +390,7 @@ function groupOf(it){
 function grouped(items){
   const m = new Map(GROUPS.map(([k])=>[k,[]]));
   for (const it of items) m.get(groupOf(it)).push(it);
-  return GROUPS.filter(([k])=>m.get(k).length).map(([k,label])=>({key:k,label,items:m.get(k)}));
+  return GROUPS.filter(([k])=>m.get(k).length).map(([k,label])=>({key:k,label,items:m.get(k).sort(byName)}));
 }
 
 /* ---- wear stats: derived from outfits, never stored ---- */
@@ -469,7 +477,7 @@ async function loadAll(){
   state.trips = trips.data.map(t => ({...t, trip_occasions:(t.trip_occasions||[]).sort((a,b)=>a.occasion_date.localeCompare(b.occasion_date) || slotOrder(a.slot)-slotOrder(b.slot))}));
 }
 function slotOrder(s){ return ['travel','primary','gym','evening','bed'].indexOf(s); }
-function setItems(rows){ state.items = rows; state.itemById = new Map(rows.map(i=>[i.id,i])); }
+function setItems(rows){ state.items = rows.slice().sort(byName); state.itemById = new Map(rows.map(i=>[i.id,i])); }
 function setOutfits(rows){
   state.outfits = rows.map(o => ({...o, items:(o.outfit_items||[]).map(r=>r.item_id)})).sort((a,b)=>b.worn_on.localeCompare(a.worn_on) || slotOrder(a.slot)-slotOrder(b.slot));
   rebuildWear();
@@ -670,13 +678,12 @@ function dayHTML(date){
       </div>`);
     }
   } else {
-    const total = logged.reduce((n,o)=>n+o.items.length,0);
-    parts.push(`<div class="between"><h1>Logged · ${total} item${total===1?'':'s'}</h1></div></div>`);
+    parts.push(`<div class="between"><h1>Logged · ${logged.length} outfit${logged.length===1?'':'s'}</h1></div></div>`);
     for (const o of logged){
       const its = o.items.map(id=>state.itemById.get(id)).filter(Boolean);
       const photo = o.photo_ref ? publicUrl(o.photo_ref) : null;
       parts.push(`<section class="stack tight">
-        <div class="between"><span class="lbl ${o.slot==='primary'?'':'accent'}">${esc(SLOT[o.slot]||o.slot)}${o.trip_id?' · TRIP':''}</span><button class="linkbtn" data-edit="${o.id}" data-date="${o.worn_on}" data-slot="${o.slot}">Edit</button></div>
+        <div class="between"><span class="lbl ${o.slot==='primary'?'':'accent'}">${esc(SLOT[o.slot]||o.slot)} · ${its.length}${o.trip_id?' · TRIP':''}</span><button class="linkbtn" data-edit="${o.id}" data-date="${o.worn_on}" data-slot="${o.slot}">Edit</button></div>
         ${photo ? `<a href="${esc(photo)}" target="_blank" rel="noopener" style="display:flex;gap:12px;align-items:center;color:inherit"><img src="${esc(photo)}" alt="Outfit photo" style="width:96px;height:128px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><span class="small muted">Outfit photo. It shows in the Looks strip of each item.</span></a>` : ''}
         <div class="rows">${its.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`})).join('')}</div>
       </section>`);
@@ -1004,6 +1011,7 @@ function bindCloset(){
    ITEM
    ------------------------------------------------------------ */
 const itemUI = { id:null, photos:null, slide:0, editing:null };
+const CHEV = '<span class="chev" aria-hidden="true">›</span>';
 async function renderItem(id){
   const it = state.itemById.get(id);
   if (!it){ $('#view').innerHTML = `<div class="stack"><a class="linkbtn" href="#/closet" style="padding-left:0">‹ Closet</a><div class="empty">No item ${id}.</div></div>`; return; }
@@ -1038,12 +1046,12 @@ function drawItem(it){
   })[k];
   const fieldHTML = (k,label,isGap) => {
     if (itemUI.editing===k) return editRowHTML(it,k,label);
-    if (isGap) return `<button type="button" class="field gap" data-edit="${k}"><span class="k">${esc(label)}</span><span class="btn warn small" style="pointer-events:none">Add</span></button>`;
-    return `<button type="button" class="field" data-edit="${k}"><span class="k">${esc(label)}</span><span class="v">${esc(valueOf(k))}</span></button>`;
+    if (isGap) return `<button type="button" class="field gap" data-edit="${k}"><span class="k">${esc(label)}</span><span class="v"><span class="btn warn small" style="pointer-events:none">Add</span></span>${CHEV}</button>`;
+    return `<button type="button" class="field" data-edit="${k}"><span class="k">${esc(label)}</span><span class="v">${esc(valueOf(k))}</span>${CHEV}</button>`;
   };
   const gapRows = gaps.filter(g=>g[2]).map(([k,l])=>fieldHTML(k,l,true)).join('');
   const knownGapRows = gaps.filter(g=>!g[2]).map(([k,l])=>fieldHTML(k,l,false)).join('');
-  const knownRows = known.map(([k,l,v]) => itemUI.editing===k ? editRowHTML(it,k,l) : `<button type="button" class="field" data-edit="${k}"><span class="k">${esc(l)}</span><span class="v">${esc(v)}</span></button>`).join('');
+  const knownRows = known.map(([k,l,v]) => itemUI.editing===k ? editRowHTML(it,k,l) : `<button type="button" class="field" data-edit="${k}"><span class="k">${esc(l)}</span><span class="v">${esc(v)}</span>${CHEV}</button>`).join('');
 
   let carousel;
   if (photos === null) carousel = `<div class="slide plate" style="background:${esc(it.swatch_hex||'#3A3F46')}">loading photos…</div>`;
@@ -1076,7 +1084,7 @@ function drawItem(it){
       ${knownGapRows}
       ${knownRows}
     </div>
-    ${itemUI.editing==='notes' ? editRowHTML(it,'notes','Notes') : `<button type="button" class="notes" data-edit="notes" style="text-align:left;width:100%">${it.notes ? esc(it.notes) : '<span class="muted">Add a note</span>'}</button>`}
+    ${itemUI.editing==='notes' ? editRowHTML(it,'notes','Notes') : `<button type="button" class="field notesrow" data-edit="notes"><span class="notes">${it.notes ? esc(it.notes) : 'Add a note'}</span>${CHEV}</button>`}
     <div class="hint">Photos are never deleted here. Changing the cover re-samples the colour.</div>
   </div>`;
   bindItem(it);
