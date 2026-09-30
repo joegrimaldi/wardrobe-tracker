@@ -145,12 +145,18 @@ input[type="search"]::-webkit-search-cancel-button{-webkit-appearance:none}
 .swatches{display:flex;gap:6px;flex-wrap:wrap}
 .swatches .sw{width:36px;height:36px}
 
-/* ---- 14-day strip ---- */
-.days{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:5px}
-.days button{height:22px;border-radius:4px;background:var(--row);border:1px solid var(--row)}
-.days button.on{background:var(--accent);border-color:var(--accent)}
-.days button.today{border-color:var(--text)}
-.days button.today.on{box-shadow:inset 0 0 0 2px var(--ground)}
+/* ---- month calendar ---- */
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal.dow span{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;letter-spacing:.08em}
+.cal button{height:44px;border-radius:8px;background:var(--row);border:1px solid var(--row);font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.cal button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.cal button.today{border-color:var(--text);color:var(--text)}
+.cal button.today.on{color:var(--on-accent);box-shadow:inset 0 0 0 2px var(--ground)}
+.cal button.sel{border-color:var(--accent);color:var(--text)}
+.cal button.sel.on{color:var(--on-accent);box-shadow:inset 0 0 0 2px var(--ground)}
+.cal button.future{background:transparent;border-color:transparent;opacity:.4}
+.calnav{width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:22px;line-height:1}
+.calnav:disabled{opacity:.25}
 
 /* ---- counters ---- */
 .counters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
@@ -315,7 +321,7 @@ const BUCKET = 'item-photos';
 const state = {
   ready:false, cats:[], catById:new Map(), items:[], itemById:new Map(),
   outfits:[], trips:[], wear:new Map(),
-  closetFilter:null, closetQuery:'', tripTab:'days', tripDay:null,
+  closetFilter:null, closetQuery:'', tripTab:'days', tripDay:null, calMonth:null, calFor:null,
   photoCache:new Map(),
 };
 
@@ -691,15 +697,39 @@ function dayHTML(date){
     const next = PICK_SLOTS.find(s => !logged.some(o=>o.slot===s) && s!=='primary') || null;
     if (next) parts.push(`<button class="btn dashed" id="addslot" data-slot="${next}">+ Add ${next==='evening'?'an evening':'a '+next} outfit</button>`);
   }
-  // 14-day strip
-  const days = Array.from({length:14},(_,i)=>addDays(todayISO(), i-13));
-  const nLogged = days.filter(d => outfitsOn(d).length).length;
-  parts.push(`<div class="stack tight" style="gap:10px">
-    <div class="between"><span class="lbl">Last 14 days</span><span class="mono">${nLogged} LOGGED</span></div>
-    <div class="days">${days.map(d=>`<button type="button" data-day="${d}" class="${outfitsOn(d).length?'on':''} ${d===todayISO()?'today':''} ${d===date&&!isToday?'today':''}" aria-label="${esc(fmtShort(d))}"></button>`).join('')}</div>
-  </div>`);
+  parts.push(calendarHTML(date));
   if (!isToday) parts.push(`<a class="linkbtn" href="#/today" style="padding-left:0">‹ Back to today</a>`);
   return `<div class="stack">${parts.join('')}</div>`;
+}
+/* Month calendar: logged days filled, today outlined, tap a day to open it. */
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function calendarHTML(date){
+  const t = todayISO();
+  if (state.calFor !== date){ state.calFor = date; state.calMonth = date.slice(0,7); }
+  const [y, m] = state.calMonth.split('-').map(Number);
+  const nDays = new Date(y, m, 0).getDate(), lead = new Date(y, m-1, 1).getDay();
+  let cells = '<i></i>'.repeat(lead), n = 0;
+  for (let d=1; d<=nDays; d++){
+    const iso = `${y}-${pad(m)}-${pad(d)}`, on = outfitsOn(iso).length > 0, future = iso > t;
+    if (on) n++;
+    const cls = [on?'on':'', iso===t?'today':'', iso===date && iso!==t ? 'sel':'', future && !on ? 'future':''].filter(Boolean).join(' ');
+    cells += `<button type="button" data-day="${iso}" class="${cls}" ${future && !on ? 'disabled':''} aria-label="${esc(fmtShort(iso))}${on?', logged':''}">${d}</button>`;
+  }
+  const atCurrent = state.calMonth >= t.slice(0,7);
+  return `<div class="stack tight" id="cal" style="gap:8px">
+    <div class="between" style="align-items:center">
+      <div style="display:flex;align-items:center;gap:2px;margin-left:-14px"><button type="button" class="calnav" id="cal-prev" aria-label="Previous month">‹</button><span class="lbl">${MONTHS[m-1]} ${y}</span><button type="button" class="calnav" id="cal-next" aria-label="Next month" ${atCurrent?'disabled':''}>›</button></div>
+      <span class="mono">${n} LOGGED</span>
+    </div>
+    <div class="cal dow">${['S','M','T','W','T','F','S'].map(d=>`<span>${d}</span>`).join('')}</div>
+    <div class="cal">${cells}</div>
+  </div>`;
+}
+function bindCalendar(date){
+  $$('#cal .cal button[data-day]').forEach(b => b.addEventListener('click', ()=>go(b.dataset.day===todayISO()?'#/today':`#/day/${b.dataset.day}`)));
+  const shift = n => { const [y,m] = state.calMonth.split('-').map(Number); const d = new Date(y, m-1+n, 1); state.calMonth = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; $('#cal').outerHTML = calendarHTML(date); bindCalendar(date); };
+  $('#cal-prev')?.addEventListener('click', ()=>shift(-1));
+  $('#cal-next')?.addEventListener('click', ()=>shift(1));
 }
 function shortName(it){ return String(it.name).split(/\s[—–]\s/)[0]; }
 function bindDay(date){
@@ -707,7 +737,7 @@ function bindDay(date){
   $('#selfiebtn')?.addEventListener('click', ()=>logFromSelfie(date));
   $('#addslot')?.addEventListener('click', e=>openPicker({date, slot:e.currentTarget.dataset.slot}));
   $$('[data-edit]').forEach(b => b.addEventListener('click', ()=>openPicker({date:b.dataset.date, slot:b.dataset.slot})));
-  $$('.days button').forEach(b => b.addEventListener('click', ()=>go(b.dataset.day===todayISO()?'#/today':`#/day/${b.dataset.day}`)));
+  bindCalendar(date);
   $('#wearagain')?.addEventListener('click', async e => {
     const btn=e.currentTarget; const prev = state.outfits.find(o=>o.id===Number(btn.dataset.outfit)); if (!prev) return;
     btn.disabled = true; btn.textContent = 'Saving…';
