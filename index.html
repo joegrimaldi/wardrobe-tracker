@@ -407,7 +407,8 @@ function priceText(it){
   if (it.unit_price == null) return 'no price';
   const n = Number(it.unit_price);
   const s = '$' + (Number.isInteger(n) ? n : n.toFixed(2));
-  return it.price_source === 'estimate' ? '~' + s : s;
+  const p = it.price_source === 'estimate' ? '~' + s : s;
+  return state.receiptIds && state.receiptIds.has(it.id) ? p + ' ✓' : p;
 }
 
 /* ---- categories / groups ---- */
@@ -526,14 +527,17 @@ function anchorWarning(itemIds, occ){
 const ITEM_COLS = 'id,name,brand,item_class,category_id,layer,size,unit_price,price_source,purchase_date,retailer,formality,weight,season_tags,colors,swatch_hex,swatch_source,location,photo_ref,photo_source,status,notes,team_id,quantity';
 
 async function loadAll(){
-  const [cats, items, outfits, trips, teams] = await Promise.all([
+  const [cats, items, outfits, trips, teams, receipts] = await Promise.all([
     sb.from('categories').select('id,name,parent_id,default_layer,sort_order').order('sort_order'),
     sb.from('items').select(ITEM_COLS).not('status','in','(donated,sold,lost)').order('name'),
     sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,occasion,notes,outfit_items(item_id)').order('worn_on',{ascending:false}).limit(1000),
     sb.from('trips').select('id,name,start_date,end_date,destination,notes,trip_occasions(id,occasion_date,slot,name,dress_code,formality_min,formality_max,excluded_category_ids,notes,occasion_items(item_id,role))').order('start_date'),
     sb.from('teams').select('id,name,kind,sort_order').order('sort_order').order('name'),
+    sb.from('acquisitions').select('matched_item_id').not('matched_item_id','is',null),
   ]);
-  for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips'],[teams,'teams']]) if (r.error) throw new Error(`${what}: ${r.error.message}`);
+  for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips'],[teams,'teams'],[receipts,'acquisitions']]) if (r.error) throw new Error(`${what}: ${r.error.message}`);
+  // Receipt match = the item is linked to a receipt line in acquisitions.
+  state.receiptIds = new Set(receipts.data.map(r=>r.matched_item_id));
   state.cats = cats.data; state.catById = new Map(cats.data.map(c=>[c.id,c])); buildGroups();
   state.teams = teams.data;
   setItems(items.data);
