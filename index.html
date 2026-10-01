@@ -426,7 +426,7 @@ function fail(where, e){
 }
 
 /* ---- poor-signal plumbing ---- */
-const BUILD = '2026-10-01.1';
+const BUILD = '2026-10-01.2';
 const NET_TIMEOUT = 4000;      // how long a read may take before the phone's own copy is shown
 class TimeoutError extends Error { constructor(what){ super(`${what} timed out`); this.name = 'TimeoutError'; } }
 function withTimeout(p, ms=NET_TIMEOUT, what='The request'){
@@ -438,14 +438,14 @@ const offline = () => navigator.onLine === false;
 let netDownAt = 0;
 const netFailed = () => { netDownAt = Date.now(); };
 const netOk = () => { netDownAt = 0; };
-const likelyDown = () => offline() || Date.now() - netDownAt < 30000;
+const likelyDown = () => offline() || (state.ready && !state.fresh) || Date.now() - netDownAt < 30000;   // also true while running on the snapshot
 function isNetError(e){
   if (!e) return false;
   if (e instanceof TimeoutError || e instanceof TypeError || e.name === 'AbortError' || e.name === 'AuthRetryableFetchError') return true;
   return !e.code && /failed to fetch|load failed|networkerror|network request failed|network connection|timed out|offline/i.test(String(e.message || e));
 }
 function needNet(){ toast('Needs a connection'); return false; }
-const offAttr = () => offline() ? ' aria-disabled="true"' : '';
+const offAttr = () => likelyDown() ? ' aria-disabled="true"' : '';
 function fmtSynced(ts){
   if (!ts) return 'never';
   const d = new Date(ts), n = now(); let h = d.getHours(); const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12;
@@ -758,7 +758,7 @@ function refresh(){
     if (itemUI.partial){ itemUI.photos = null; itemUI.partial = false; }
     if (!busyEditing()) render({keepScroll:true});
     setTimeout(flushQueue, 0);
-  }, e => { if (isNetError(e)) netFailed(); throw e; }).finally(() => { refreshing = null; });
+  }, e => { if (isNetError(e)) netFailed(); else if (state.ready) fail('refresh your closet', e); throw e; }).finally(() => { refreshing = null; });
   return refreshing;
 }
 function busyEditing(){ return route().seg[0] === 'item' && !!itemUI.editing; }
@@ -1082,7 +1082,7 @@ function drawPicker(){
       ${suggPossible.length ? `<div class="lbl grouphead">Possible · partly hidden</div><div class="rows">${suggPossible.map(s=>itemRowHTML(s.it,{check:p.picked.has(s.it.id), end:{text:s.why}})).join('')}</div>` : ''}
       ${recent.length ? `<div class="lbl grouphead">Worn lately</div><div class="rows">${rowsHTML(recent.filter(i=>!shownIds.has(i.id)))}</div>` : ''}
       ${rest.map(g=>`<div class="lbl grouphead">${esc(g.label)} · ${g.items.length}</div><div class="rows">${rowsHTML(g.items.filter(i=>!shownIds.has(i.id)))}</div>`).join('')}
-      ${!list.length && !p.loading ? `<div class="empty">Nothing matches${p.query.trim()?` “${esc(p.query.trim())}”`:''}.</div><button type="button" class="btn outline" id="pk-additem"${offAttr()}>+ Add item</button>${offline() ? '<div class="needsnet" style="padding-top:6px">Adding an item needs a connection</div>' : ''}` : ''}
+      ${!list.length && !p.loading ? `<div class="empty">Nothing matches${p.query.trim()?` “${esc(p.query.trim())}”`:''}.</div><button type="button" class="btn outline" id="pk-additem"${offAttr()}>+ Add item</button>${likelyDown() ? '<div class="needsnet" style="padding-top:6px">Adding an item needs a connection</div>' : ''}` : ''}
       ${hiddenCount ? `<button class="btn dashed" id="pk-showall" style="margin-top:16px">Show ${hiddenCount} hidden by the dress code / storage</button>` : ''}
     </div>
     <div class="sheet-foot">
@@ -1119,7 +1119,7 @@ function bindPickerBody(){
     if (picker.mode==='plan'){ drawPickerBody(); }
   });
   $('#pk-showall')?.addEventListener('click', ()=>{ picker.showAll=true; drawPickerBody(); });
-  $('#pk-additem')?.addEventListener('click', ()=>{ if (offline()) return needNet(); openAdder({fromPicker:true, hintName:picker.query.trim()}); });
+  $('#pk-additem')?.addEventListener('click', ()=>{ if (likelyDown()) return needNet(); openAdder({fromPicker:true, hintName:picker.query.trim()}); });
 }
 async function savePicker(){
   const p = picker; if (!p || !p.picked.size) return;
@@ -1127,7 +1127,7 @@ async function savePicker(){
   const ids = [...p.picked];
   try {
     if (p.mode==='plan'){
-      if (offline()){ needNet(); btn.disabled=false; btn.textContent=p.saveLabel; return; }
+      if (likelyDown()){ needNet(); btn.disabled=false; btn.textContent=p.saveLabel; return; }
       await savePlan(p.occasion.id, ids);
       toast(`Planned ${ids.length} items`); closePicker(); render(); return;
     }
@@ -1183,7 +1183,7 @@ function occasionCardHTML(tr, o){
     </div>`;
   }
   if (!planned.length){
-    return `<div class="card">${head}<button class="btn dashed" data-plan="${o.id}"${offAttr()}>Plan this outfit</button>${offline() ? '<div class="needsnet">Planning needs a connection</div>' : ''}<button class="btn" data-wore-adhoc="${o.id}">Log what I wore</button></div>`;
+    return `<div class="card">${head}<button class="btn dashed" data-plan="${o.id}"${offAttr()}>Plan this outfit</button>${likelyDown() ? '<div class="needsnet">Planning needs a connection</div>' : ''}<button class="btn" data-wore-adhoc="${o.id}">Log what I wore</button></div>`;
   }
   return `<div class="card accent">${head}
     <div class="rows">${its.map(i=>itemRowHTML(i)).join('')}${missing.map(m=>`<div class="warnrow"><span class="sw sm dashed"></span><span class="txt">${esc(m)}</span></div>`).join('')}</div>
@@ -1195,7 +1195,7 @@ function bindTrip(){
   $$('.daychips button').forEach(b => b.onclick = () => { state.tripDay=b.dataset.day; render(); });
   const tr = currentTrip(); if (!tr) return;
   const occ = id => tr.trip_occasions.find(o=>o.id===Number(id));
-  $$('[data-plan]').forEach(b => b.onclick = () => { if (offline()) return needNet(); const o=occ(b.dataset.plan); openPicker({mode:'plan', date:o.occasion_date, slot:o.slot, occasion:o, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save plan'}); });
+  $$('[data-plan]').forEach(b => b.onclick = () => { if (likelyDown()) return needNet(); const o=occ(b.dataset.plan); openPicker({mode:'plan', date:o.occasion_date, slot:o.slot, occasion:o, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save plan'}); });
   $$('[data-swap]').forEach(b => b.onclick = () => { const o=occ(b.dataset.swap); openPicker({date:o.occasion_date, slot:o.slot, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save as worn'}); });
   $$('[data-wore-adhoc]').forEach(b => b.onclick = () => { const o=occ(b.dataset.woreAdhoc); openPicker({date:o.occasion_date, slot:o.slot, trip:tr}); });
   $$('[data-edit-worn]').forEach(b => b.onclick = () => { const o=occ(b.dataset.editWorn); openPicker({date:o.occasion_date, slot:o.slot, trip:tr}); });
@@ -1275,7 +1275,7 @@ function closetHTML(){
   }
   return `<div class="stack" style="gap:14px">
     <div class="between" style="align-items:center"><h1 class="sm">Closet</h1><span style="display:flex;align-items:center;gap:12px"><span class="mono">${all.length} ITEMS</span><button type="button" class="btn outline" id="cl-add"${offAttr()} style="padding:0 14px">+ Item</button></span></div>
-    ${offline() ? '<div class="needsnet" style="text-align:right;margin-top:-8px">Adding an item needs a connection</div>' : ''}
+    ${likelyDown() ? '<div class="needsnet" style="text-align:right;margin-top:-8px">Adding an item needs a connection</div>' : ''}
     <input type="search" class="input" id="cl-q" placeholder="Search your closet" value="${esc(state.closetQuery)}" autocomplete="off" autocorrect="off" autocapitalize="off">
     <div class="stack tight" style="gap:8px"><div class="lbl">Needs attention</div>
       <div class="counters">${Object.entries(GAPS).map(([k,g])=>`<button type="button" data-f="${k}" aria-pressed="${f===k}"><b>${all.filter(g.test).length}</b><span>${g.label}</span></button>`).join('')}</div>
@@ -1296,7 +1296,7 @@ async function resetOfflineCache(){
   location.reload();
 }
 function bindCloset(){
-  $('#cl-add').onclick = () => { if (offline()) return needNet(); openAdder(); };
+  $('#cl-add').onclick = () => { if (likelyDown()) return needNet(); openAdder(); };
   $('#cl-reset').onclick = resetOfflineCache;
   $$('.counters button').forEach(b => b.onclick = () => { state.closetFilter = state.closetFilter===b.dataset.f ? null : b.dataset.f; render(); });
   const q = $('#cl-q');
@@ -1313,7 +1313,7 @@ async function renderItem(id){
   if (!it){ $('#view').innerHTML = `<div class="stack"><a class="linkbtn" href="#/closet" style="padding-left:0">‹ Closet</a><div class="empty">No item ${id}.</div></div>`; return; }
   if (itemUI.id !== id){ itemUI.id=id; itemUI.photos=null; itemUI.slide=0; itemUI.editing=null; itemUI.partial=false; }
   const coverOnly = () => { const c = stripBucket(it.photo_ref); itemUI.photos = c ? [c] : []; itemUI.slide = 0; itemUI.partial = true; };
-  if (itemUI.photos === null && offline()) coverOnly();     // the photo list needs the network; show the cover if the phone has it
+  if (itemUI.photos === null && likelyDown()) coverOnly();     // the photo list needs the network; show the cover if the phone has it
   drawItem(it);
   if (itemUI.photos === null){
     try { const files = await listItemPhotos(it); if (itemUI.id===id){ itemUI.photos = files; itemUI.partial = false; const cover=stripBucket(it.photo_ref); itemUI.slide = Math.max(0, files.indexOf(cover)); drawItem(state.itemById.get(id)); } }
@@ -1383,7 +1383,7 @@ function drawItem(it){
       ${knownRows}
     </div>
     ${itemUI.editing==='notes' ? editRowHTML(it,'notes','Notes') : `<button type="button" class="field notesrow" data-edit="notes"${offAttr()}><span class="notes">${it.notes ? esc(it.notes) : 'Add a note'}</span>${CHEV}</button>`}
-    <div class="hint">${offline() ? 'Offline: photos and edits need a connection. Logging outfits still works.' : 'Photos are never deleted here. Changing the cover re-samples the colour.'}</div>
+    <div class="hint">${likelyDown() ? 'Offline: photos and edits need a connection. Logging outfits still works.' : 'Photos are never deleted here. Changing the cover re-samples the colour.'}</div>
   </div>`;
   bindItem(it);
 }
@@ -1413,7 +1413,7 @@ function bindItem(it){
   if (itemUI.photos && itemUI.photos.length) requestAnimationFrame(()=>{ car.scrollLeft = itemUI.slide*308; });
 
   $('#it-addphoto').onclick = async () => {
-    if (offline()) return needNet();
+    if (likelyDown()) return needNet();
     const file = await pickFile(); if (!file) return;
     toast('Uploading…');
     try {
@@ -1431,7 +1431,7 @@ function bindItem(it){
     } catch(e){ fail('upload the photo', e); }
   };
   $('#it-cover')?.addEventListener('click', async () => {
-    if (offline()) return needNet();
+    if (likelyDown()) return needNet();
     const path = itemUI.photos[itemUI.slide]; if (!path) return;
     const btn=$('#it-cover'); btn.disabled=true; btn.textContent='Sampling…';
     try {
@@ -1443,7 +1443,7 @@ function bindItem(it){
       toast(hex ? `Cover set · colour ${hex}` : 'Cover set (colour unchanged)'); drawItem(it);
     } catch(e){ fail('set the cover', e); btn.disabled=false; btn.textContent='Set as cover'; }
   });
-  $$('[data-edit]').forEach(b => b.onclick = () => { if (offline()) return needNet(); itemUI.editing = b.dataset.edit; drawItem(it); const ed=$('#ed'); if (ed && ed.focus && ed.tagName!=='DIV') ed.focus(); });
+  $$('[data-edit]').forEach(b => b.onclick = () => { if (likelyDown()) return needNet(); itemUI.editing = b.dataset.edit; drawItem(it); const ed=$('#ed'); if (ed && ed.focus && ed.tagName!=='DIV') ed.focus(); });
   const er = $('.editrow');
   if (er){
     const k = er.dataset.editing;
@@ -1482,7 +1482,7 @@ const nz = v => { const s = String(v ?? '').trim(); return s === '' ? null : s; 
 let adder = null;
 
 function openAdder(opts={}){
-  if (offline()) return needNet();
+  if (likelyDown()) return needNet();
   adder = { step:'capture', item:null, labels:[], draft:null, receipts:[], duplicates:[], dupDismissed:false,
             receiptId:null, form:null, ai:{}, error:null, abort:null, timer:null, busy:false, saved:null,
             fromPicker:!!opts.fromPicker, hintName:opts.hintName||'' };
