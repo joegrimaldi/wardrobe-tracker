@@ -355,7 +355,7 @@ const BUCKET = 'item-photos';
    ------------------------------------------------------------ */
 const state = {
   ready:false, cats:[], catById:new Map(), items:[], itemById:new Map(),
-  outfits:[], trips:[], teams:[], wear:new Map(),
+  outfits:[], trips:[], teams:[], wear:new Map(), groupOrder:[], groupByParent:new Map(),
   closetFilter:null, closetQuery:'', tripTab:'days', tripDay:null, calMonth:null, calFor:null,
   photoCache:new Map(),
 };
@@ -411,27 +411,48 @@ function priceText(it){
 }
 
 /* ---- categories / groups ---- */
-const GROUPS = [['jackets','Jackets & Coats'],['shirts','Shirts & Tops'],['knit','Knitwear'],['pants','Pants'],['shoes','Shoes'],['acc','Accessories'],['other','Other']];
-const GROUP_LABEL = Object.fromEntries(GROUPS);
+/* Groups shown in Closet, the picker and Pack. Membership is derived from
+   categories.parent_id at load time: each top-level category belongs to the
+   group that names it here; a top-level category nobody names becomes its own
+   group (label = its name) instead of falling into Other. This list only
+   fixes the display order and the labels. */
+const GROUP_DEFS = [
+  { key:'coats',   label:'Coats & Outerwear',    parents:['Outerwear','Tailoring'] },
+  { key:'shirts',  label:'Shirts & Tops',        parents:['Tops'] },
+  { key:'jackets', label:'Jackets & Overshirts', parents:['Jackets & Overshirts'] },
+  { key:'knit',    label:'Knitwear',             parents:['Knitwear'] },
+  { key:'pants',   label:'Pants',                parents:['Bottoms'] },
+  { key:'shoes',   label:'Shoes',                parents:['Shoes'] },
+  { key:'acc',     label:'Accessories',          parents:['Accessories'] },
+  { key:'other',   label:'Other',                parents:['Collection','Property'] },
+];
+const LAYER_SPLIT = new Set(['Activewear']);   // children file under Shirts or Pants by their layer
+const LAYER_GROUP = { outer:'coats', shirt:'shirts', pants:'pants', shoes:'shoes', accessory:'acc' };
+function buildGroups(){
+  const byName = new Map(); for (const g of GROUP_DEFS) for (const n of g.parents) byName.set(n, g.key);
+  state.groupByParent = new Map();
+  const extra = [];
+  for (const c of state.cats.filter(c => !c.parent_id).sort((x,y) => (x.sort_order||0) - (y.sort_order||0))){
+    if (LAYER_SPLIT.has(c.name)) continue;
+    let key = byName.get(c.name);
+    if (!key){ key = 'p' + c.id; extra.push([key, c.name]); }
+    state.groupByParent.set(c.id, key);
+  }
+  const known = GROUP_DEFS.map(g => [g.key, g.label]);
+  state.groupOrder = [...known.filter(([k]) => k !== 'other'), ...extra, ...known.filter(([k]) => k === 'other')];
+}
 function catOf(it){ return state.catById.get(it.category_id); }
 function parentCat(it){ const c=catOf(it); if (!c) return null; return c.parent_id ? state.catById.get(c.parent_id) : c; }
 function layerOf(it){ return it.layer || catOf(it)?.default_layer || 'other'; }
 function groupOf(it){
-  const p = parentCat(it)?.name;
-  switch (p){
-    case 'Outerwear': case 'Tailoring': return 'jackets';
-    case 'Tops': return 'shirts';
-    case 'Knitwear': return 'knit';
-    case 'Bottoms': return 'pants';
-    case 'Shoes': return 'shoes';
-    case 'Accessories': return 'acc';
-  }
-  return {outer:'jackets', shirt:'shirts', pants:'pants', shoes:'shoes', accessory:'acc'}[layerOf(it)] || 'other';
+  const p = parentCat(it);
+  if (p && !LAYER_SPLIT.has(p.name)){ const k = state.groupByParent.get(p.id); if (k) return k; }
+  return LAYER_GROUP[(p && catOf(it)?.default_layer) || layerOf(it)] || 'other';
 }
 function grouped(items){
-  const m = new Map(GROUPS.map(([k])=>[k,[]]));
+  const m = new Map(state.groupOrder.map(([k])=>[k,[]]));
   for (const it of items) m.get(groupOf(it)).push(it);
-  return GROUPS.filter(([k])=>m.get(k).length).map(([k,label])=>({key:k,label,items:m.get(k).sort(byName)}));
+  return state.groupOrder.filter(([k])=>m.get(k).length).map(([k,label])=>({key:k,label,items:m.get(k).sort(byName)}));
 }
 
 /* ---- wear stats: derived from outfits, never stored ---- */
@@ -494,7 +515,7 @@ function planAllowed(it, occ){
 function anchorWarning(itemIds, occ){
   if (!occ || occ.formality_min == null) return '';
   const its = itemIds.map(id=>state.itemById.get(id)).filter(Boolean);
-  const anchors = its.filter(i => ['jackets','pants','shoes'].includes(groupOf(i)));
+  const anchors = its.filter(i => ['coats','jackets','pants','shoes'].includes(groupOf(i)));
   if (!anchors.length) return '';
   return anchors.some(i => (i.formality||0) >= occ.formality_min) ? '' : `No anchor piece at formality ${occ.formality_min}+`;
 }
@@ -513,7 +534,7 @@ async function loadAll(){
     sb.from('teams').select('id,name,kind,sort_order').order('sort_order').order('name'),
   ]);
   for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips'],[teams,'teams']]) if (r.error) throw new Error(`${what}: ${r.error.message}`);
-  state.cats = cats.data; state.catById = new Map(cats.data.map(c=>[c.id,c]));
+  state.cats = cats.data; state.catById = new Map(cats.data.map(c=>[c.id,c])); buildGroups();
   state.teams = teams.data;
   setItems(items.data);
   setOutfits(outfits.data);

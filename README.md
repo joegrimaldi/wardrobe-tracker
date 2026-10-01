@@ -12,6 +12,7 @@ Phone-first outfit log. One static page (`index.html`) on GitHub Pages, data in 
 - The existing outfit for a date/slot is **always fetched before showing or saving** (`fetchOutfit`). Saving replaces the item list; an empty list is never saved.
 - Wear counts, last-worn and cost-per-wear are derived from `outfit_items`, never stored.
 - `occasion_items` is the plan; it is never counted as a wear.
+- Closet, picker and Pack groups come from `categories.parent_id` at load time. `GROUP_DEFS` in `index.html` only sets the order and labels; a new top-level category nobody lists there becomes its own group instead of landing in Other.
 - Prices: receipt/manual `$X`, estimate `~$X`, null "no price".
 - Pack-list ticks live in `localStorage` (`pack:<trip_id>`), per device, by design.
 - Photos are never deleted from the bucket; changing the cover repoints `items.photo_ref` and re-samples `swatch_hex` (`swatch_source = 'photo'`).
