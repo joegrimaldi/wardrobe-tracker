@@ -14,7 +14,7 @@
 <link rel="icon" href="apple-touch-icon.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" crossorigin="anonymous">
 <style>
 /* ============================================================
    WARDROBE — phone-first rebuild (2026-09-30)
@@ -236,6 +236,13 @@ nav#nav a[aria-current="page"]{color:var(--accent);font-weight:600}
 .daychips button[aria-pressed="true"]{background:var(--line);color:var(--text)}
 .daychips button.logged::after{content:'';display:inline-block;width:6px;height:6px;border-radius:3px;background:var(--accent);margin-left:6px}
 
+/* ---- poor-signal status ---- */
+#net{padding:calc(var(--sat) + 8px) 20px 0;display:flex;flex-direction:column;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted)}
+#net button{font-family:inherit;font-size:inherit;letter-spacing:inherit;color:var(--accent);text-align:left;min-height:44px;display:flex;align-items:center}
+#net:not([hidden]) + #view{padding-top:10px}
+[aria-disabled="true"]{opacity:.45}
+.needsnet{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted)}
+
 /* ---- add item ---- */
 .sheet.top{z-index:50}
 .capgrid{display:grid;grid-template-columns:3fr 2fr;gap:8px}
@@ -312,10 +319,26 @@ nav#nav a[aria-current="page"]{color:var(--accent);font-weight:600}
   };
   window.addEventListener('error', function(e){ if (!window.__wardrobe.booted) window.showFatal('The app failed to start', e.message || String(e.error||e)); });
   window.addEventListener('unhandledrejection', function(e){ var r=e.reason; window.showFatal(window.__wardrobe.booted ? 'Something went wrong' : 'The app failed to start', (r && r.message) || String(r)); });
-  setTimeout(function(){ if (!window.__wardrobe.booted) window.showFatal('The app code did not load', 'Could not reach esm.sh for supabase-js within 12 s. Check the connection and reload.'); }, 12000);
+  setTimeout(function(){ if (!window.__wardrobe.booted) window.showFatal('The app code did not load', 'Could not load the app code within 12 s. Check the connection and reload.'); }, 12000);
+  // Service worker: the app shell opens with no signal. Registered from this
+  // classic script so it installs even if the module below fails.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').then(function(reg){
+        reg.update().catch(function(){});
+        var send = function(){
+          var urls = performance.getEntriesByType('resource').map(function(e){ return e.name; })
+            .filter(function(u){ return /^https:\/\/(esm\.sh|fonts\.googleapis\.com|fonts\.gstatic\.com)\//.test(u); });
+          navigator.serviceWorker.ready.then(function(r){ if (r.active) r.active.postMessage({ type:'precache', urls:urls }); });
+        };
+        send(); setTimeout(send, 4000);
+      }).catch(function(e){ console.warn('service worker not registered', e); });
+    });
+  }
 </script>
 
 <div id="fatal" role="alert" hidden><span class="t"></span><span class="m"></span></div>
+<div id="net" hidden></div>
 <main id="view"><div class="loading">Loading</div></main>
 <nav id="nav" aria-label="Sections">
   <a href="#/today" data-tab="today">Today</a>
@@ -339,9 +362,9 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 
 let createClient;
 try {
-  ({ createClient } = await import('https://esm.sh/@supabase/supabase-js@2'));
+  ({ createClient } = await import('https://esm.sh/@supabase/supabase-js@2.117.2'));
 } catch (e) {
-  window.showFatal('The app code did not load', 'esm.sh is unreachable: ' + (e && e.message ? e.message : e));
+  window.showFatal('The app code did not load', 'supabase-js could not be loaded: ' + (e && e.message ? e.message : e));
   throw e;
 }
 window.__wardrobe.booted = true;
@@ -357,7 +380,7 @@ const state = {
   ready:false, cats:[], catById:new Map(), items:[], itemById:new Map(),
   outfits:[], trips:[], teams:[], wear:new Map(), groupOrder:[], groupByParent:new Map(),
   closetFilter:null, closetQuery:'', tripTab:'days', tripDay:null, calMonth:null, calFor:null,
-  photoCache:new Map(),
+  serverOutfits:[], fresh:false, syncedAt:0,
 };
 
 /* ------------------------------------------------------------
@@ -396,10 +419,39 @@ const cap = s => s ? s[0].toUpperCase()+s.slice(1) : '';
 const sortKey = s => String(s ?? '').replace(/^[^\p{L}\p{N}]+/u, '').toLowerCase();
 const byName = (a, b) => sortKey(a.name).localeCompare(sortKey(b.name), undefined, {numeric:true, sensitivity:'base'}) || a.id - b.id;
 
-function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'), 2200); }
+function toast(msg, ms=2200){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'), ms); }
 function fail(where, e){
-  const box=$('#err'); box.textContent = `Could not ${where}: ${(e && e.message) || e}`; box.classList.add('show');
+  const box=$('#err'); box.textContent = `Could not ${where}: ${isNetError(e) ? 'no connection. Try again when you have signal.' : ((e && e.message) || e)}`; box.classList.add('show');
   console.error(where, e); clearTimeout(fail._t); fail._t=setTimeout(()=>box.classList.remove('show'), 8000);
+}
+
+/* ---- poor-signal plumbing ---- */
+const BUILD = '2026-10-01.1';
+const NET_TIMEOUT = 4000;      // how long a read may take before the phone's own copy is shown
+class TimeoutError extends Error { constructor(what){ super(`${what} timed out`); this.name = 'TimeoutError'; } }
+function withTimeout(p, ms=NET_TIMEOUT, what='The request'){
+  return new Promise((res, rej) => { const t = setTimeout(() => rej(new TimeoutError(what)), ms); Promise.resolve(p).then(v => { clearTimeout(t); res(v); }, e => { clearTimeout(t); rej(e); }); });
+}
+const offline = () => navigator.onLine === false;
+/* navigator.onLine says "online" on wifi with no internet. Remember a recent network
+   failure so the next log parks at once instead of waiting out another timeout. */
+let netDownAt = 0;
+const netFailed = () => { netDownAt = Date.now(); };
+const netOk = () => { netDownAt = 0; };
+const likelyDown = () => offline() || Date.now() - netDownAt < 30000;
+function isNetError(e){
+  if (!e) return false;
+  if (e instanceof TimeoutError || e instanceof TypeError || e.name === 'AbortError' || e.name === 'AuthRetryableFetchError') return true;
+  return !e.code && /failed to fetch|load failed|networkerror|network request failed|network connection|timed out|offline/i.test(String(e.message || e));
+}
+function needNet(){ toast('Needs a connection'); return false; }
+const offAttr = () => offline() ? ' aria-disabled="true"' : '';
+function fmtSynced(ts){
+  if (!ts) return 'never';
+  const d = new Date(ts), n = now(); let h = d.getHours(); const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12;
+  const t = `${h}:${pad(d.getMinutes())} ${ap}`;
+  if (d.toDateString() === n.toDateString()) return t;
+  return ((n - d) / 86400000 < 6 ? WD[d.getDay()] : `${d.getDate()} ${MO[d.getMonth()]}`) + ' ' + t;
 }
 
 /* ---- prices: never show an estimate without the ~ ---- */
@@ -408,7 +460,7 @@ function priceText(it){
   const n = Number(it.unit_price);
   const s = '$' + (Number.isInteger(n) ? n : n.toFixed(2));
   const p = it.price_source === 'estimate' ? '~' + s : s;
-  return state.receiptIds && state.receiptIds.has(it.id) ? p + ' ✓' : p;
+  return it.price_source === 'receipt' ? p + ' ✓' : p;   // ✓ = the price itself came from a receipt, not merely that one is linked
 }
 
 /* ---- categories / groups ---- */
@@ -526,47 +578,94 @@ function anchorWarning(itemIds, occ){
    ------------------------------------------------------------ */
 const ITEM_COLS = 'id,name,brand,item_class,category_id,layer,size,unit_price,price_source,purchase_date,retailer,formality,weight,season_tags,colors,swatch_hex,swatch_source,location,photo_ref,photo_source,status,notes,team_id,quantity';
 
-async function loadAll(){
-  const [cats, items, outfits, trips, teams, receipts] = await Promise.all([
+const OUTFIT_SEL = 'id,worn_on,slot,trip_id,photo_ref,occasion,notes,outfit_items(item_id)';
+const TRIP_SEL = 'id,name,start_date,end_date,destination,notes,trip_occasions(id,occasion_date,slot,name,dress_code,formality_min,formality_max,excluded_category_ids,notes,occasion_items(item_id,role))';
+function slotOrder(s){ return ['travel','primary','gym','evening','bed'].indexOf(s); }
+const sortTrips = rows => rows.map(t => ({...t, trip_occasions:(t.trip_occasions||[]).slice().sort((a,b)=>a.occasion_date.localeCompare(b.occasion_date) || slotOrder(a.slot)-slotOrder(b.slot))}));
+
+async function fetchAll(){
+  const [cats, items, outfits, trips, teams] = await Promise.all([
     sb.from('categories').select('id,name,parent_id,default_layer,sort_order').order('sort_order'),
     sb.from('items').select(ITEM_COLS).not('status','in','(donated,sold,lost)').order('name'),
-    sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,occasion,notes,outfit_items(item_id)').order('worn_on',{ascending:false}).limit(1000),
-    sb.from('trips').select('id,name,start_date,end_date,destination,notes,trip_occasions(id,occasion_date,slot,name,dress_code,formality_min,formality_max,excluded_category_ids,notes,occasion_items(item_id,role))').order('start_date'),
+    sb.from('outfits').select(OUTFIT_SEL).order('worn_on',{ascending:false}).limit(1000),
+    sb.from('trips').select(TRIP_SEL).order('start_date'),
     sb.from('teams').select('id,name,kind,sort_order').order('sort_order').order('name'),
-    sb.from('acquisitions').select('matched_item_id').not('matched_item_id','is',null),
   ]);
-  for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips'],[teams,'teams'],[receipts,'acquisitions']]) if (r.error) throw new Error(`${what}: ${r.error.message}`);
-  // Receipt match = the item is linked to a receipt line in acquisitions.
-  state.receiptIds = new Set(receipts.data.map(r=>r.matched_item_id));
-  state.cats = cats.data; state.catById = new Map(cats.data.map(c=>[c.id,c])); buildGroups();
-  state.teams = teams.data;
-  setItems(items.data);
-  setOutfits(outfits.data);
-  state.trips = trips.data.map(t => ({...t, trip_occasions:(t.trip_occasions||[]).sort((a,b)=>a.occasion_date.localeCompare(b.occasion_date) || slotOrder(a.slot)-slotOrder(b.slot))}));
+  for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips'],[teams,'teams']]) if (r.error) throw Object.assign(r.error, { message:`${what}: ${r.error.message}` });
+  return { cats:cats.data, teams:teams.data, items:items.data, outfits:outfits.data, trips:sortTrips(trips.data) };
 }
-function slotOrder(s){ return ['travel','primary','gym','evening','bed'].indexOf(s); }
+function applyData(d, fresh, at){
+  state.cats = d.cats; state.catById = new Map(d.cats.map(c=>[c.id,c])); buildGroups();
+  state.teams = d.teams || []; setItems(d.items); state.trips = d.trips || []; setOutfits(d.outfits || []);
+  state.fresh = fresh; state.syncedAt = at;
+}
 function setItems(rows){ state.items = rows.slice().sort(byName); state.itemById = new Map(rows.map(i=>[i.id,i])); }
+
+/* ---- snapshot: the last data the server gave us, kept on this phone ---- */
+const SNAP_KEY = 'wardrobe:snapshot:v1', QUEUE_KEY = 'wardrobe:queue:v1';
+function saveSnapshot(){
+  if (!state.ready) return;
+  try { localStorage.setItem(SNAP_KEY, JSON.stringify({ v:1, savedAt:state.syncedAt || Date.now(), cats:state.cats, teams:state.teams, items:state.items, outfits:state.serverOutfits, trips:state.trips })); }
+  catch (e) { console.warn('snapshot not saved', e); }
+}
+function readSnapshot(){
+  try { const s = JSON.parse(localStorage.getItem(SNAP_KEY) || 'null'); return s && s.v === 1 && Array.isArray(s.items) && Array.isArray(s.cats) ? s : null; }
+  catch { return null; }
+}
+
+/* ---- write queue: outfit logs that have not reached the server yet ----
+   One entry per (worn_on, slot); re-saving the same day and slot replaces it
+   (last write wins, as online). worn_on is fixed at the moment of logging. */
+function readQueue(){ try { const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); return Array.isArray(q) ? q : []; } catch { return []; } }
+function writeQueue(q){ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }   // throws on purpose: a log that can't be stored must not look saved
+function queuePut(entry){ const q = readQueue().filter(e => !(e.worn_on===entry.worn_on && e.slot===entry.slot)); q.push(entry); writeQueue(q); }
+function queueDrop(pred){ const q = readQueue(), keep = q.filter(e => !pred(e)); if (keep.length !== q.length) writeQueue(keep); }
+
+/* state.outfits = what the server has + whatever is still waiting in the queue */
 function setOutfits(rows){
-  state.outfits = rows.map(o => ({...o, items:(o.outfit_items||[]).map(r=>r.item_id)})).sort((a,b)=>b.worn_on.localeCompare(a.worn_on) || slotOrder(a.slot)-slotOrder(b.slot));
+  state.serverOutfits = rows;
+  const list = rows.map(o => ({...o, items:(o.outfit_items||[]).map(r=>r.item_id)}));
+  for (const q of readQueue()){
+    const ex = list.find(o => o.worn_on===q.worn_on && o.slot===q.slot);
+    if (ex){ ex.items = q.item_ids.slice(); ex.queued = true; if (q.trip_id && !ex.trip_id) ex.trip_id = q.trip_id; }
+    else list.push({ id:`q:${q.worn_on}:${q.slot}`, worn_on:q.worn_on, slot:q.slot, trip_id:q.trip_id||null, photo_ref:q.photo_ref||null, occasion:null, notes:null, items:q.item_ids.slice(), queued:true });
+  }
+  state.outfits = list.sort((a,b)=>b.worn_on.localeCompare(a.worn_on) || slotOrder(a.slot)-slotOrder(b.slot));
   rebuildWear();
 }
+function patchServerOutfit({id, date, slot, itemIds, tripId, photoPath}){
+  const rows = (state.serverOutfits||[]).slice(), i = rows.findIndex(o => o.worn_on===date && o.slot===slot);
+  const prev = i >= 0 ? rows[i] : { id, worn_on:date, slot, trip_id:null, photo_ref:null, occasion:null, notes:null };
+  const row = {...prev, id: id ?? prev.id, trip_id: prev.trip_id || tripId || null, photo_ref: photoPath || prev.photo_ref || null, outfit_items: itemIds.map(item_id => ({item_id}))};
+  if (i >= 0) rows[i] = row; else rows.push(row);
+  setOutfits(rows);
+}
 async function reloadOutfits(){
-  const { data, error } = await sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,occasion,notes,outfit_items(item_id)').order('worn_on',{ascending:false}).limit(1000);
-  if (error) throw error; setOutfits(data);
+  const { data, error } = await sb.from('outfits').select(OUTFIT_SEL).order('worn_on',{ascending:false}).limit(1000);
+  if (error) throw error; setOutfits(data); saveSnapshot();
 }
 async function reloadTrips(){
-  const { data, error } = await sb.from('trips').select('id,name,start_date,end_date,destination,notes,trip_occasions(id,occasion_date,slot,name,dress_code,formality_min,formality_max,excluded_category_ids,notes,occasion_items(item_id,role))').order('start_date');
+  const { data, error } = await sb.from('trips').select(TRIP_SEL).order('start_date');
   if (error) throw error;
-  state.trips = data.map(t => ({...t, trip_occasions:(t.trip_occasions||[]).sort((a,b)=>a.occasion_date.localeCompare(b.occasion_date) || slotOrder(a.slot)-slotOrder(b.slot))}));
+  state.trips = sortTrips(data); saveSnapshot();
 }
-/* Always fetch the live outfit for a date/slot before editing or saving. */
+/* The live outfit for a date/slot, straight from the server. */
 async function fetchOutfit(date, slot){
   const { data, error } = await sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,outfit_items(item_id)').eq('worn_on',date).eq('slot',slot).maybeSingle();
   if (error) throw error;
   return data ? {...data, items:(data.outfit_items||[]).map(r=>r.item_id)} : null;
 }
-/* Save = replace the outfit's item list. Never called with an empty list. */
-async function saveOutfit({date, slot, itemIds, tripId, photoPath}){
+/* What is logged for a date/slot, as far as this phone can tell: a queued log
+   wins (it is newer than the server), then the server if it answers within the
+   timeout, then the phone's own copy. Always called before editing or saving. */
+async function existingOutfit(date, slot){
+  const local = () => { const o = outfitFor(date, slot); return o ? { id:o.id, items:o.items.slice(), trip_id:o.trip_id, photo_ref:o.photo_ref } : null; };
+  if (likelyDown() || readQueue().some(e => e.worn_on===date && e.slot===slot)) return local();
+  try { const o = await withTimeout(fetchOutfit(date, slot), NET_TIMEOUT, 'Loading'); netOk(); return o; }
+  catch (e) { if (isNetError(e)){ netFailed(); return local(); } throw e; }
+}
+/* Server write = replace the outfit's item list. Idempotent for a given (date, slot, items). */
+async function saveOutfitRemote({date, slot, itemIds, tripId, photoPath}){
   if (!itemIds.length) throw new Error('nothing selected');
   const existing = await fetchOutfit(date, slot);
   let id;
@@ -585,29 +684,105 @@ async function saveOutfit({date, slot, itemIds, tripId, photoPath}){
   }
   const del = await sb.from('outfit_items').delete().eq('outfit_id', id); if (del.error) throw del.error;
   const ins = await sb.from('outfit_items').insert(itemIds.map(item_id => ({outfit_id:id, item_id}))); if (ins.error) throw ins.error;
-  await reloadOutfits();
   return id;
 }
+/* THE one way an outfit is logged (picker Save, Wear again, Trip "Wore this").
+   Online it writes to the server. With no connection, or if the server does not
+   answer, the log is parked on the phone, shown as logged, and synced later.
+   A selfie cannot be parked; the outfit is saved without it. */
+async function logOutfit({date, slot, itemIds, tripId, photo}){
+  if (!itemIds.length) throw new Error('nothing selected');
+  const entry = { worn_on:date, slot, trip_id:tripId||null, item_ids:itemIds.slice(), queued_at:Date.now() };
+  const park = photoPath => {
+    if (photoPath) entry.photo_ref = photoPath;
+    queuePut(entry); setOutfits(state.serverOutfits||[]); updateNetBar();
+    return { queued:true, photoDropped: !!photo && !photoPath };
+  };
+  if (offline()) return park(null);
+  if (!photo && likelyDown()){ const r = park(null); setTimeout(flushQueue, 1500); return r; }   // the flush doubles as the probe
+  let photoPath = null;
+  if (photo){
+    try { photoPath = await uploadBlob(`outfits/${date}-${slot}.jpg`, photo.blob, true, 20000); }
+    catch (e) { if (!isNetError(e)) throw e; }
+  }
+  try {
+    const id = await withTimeout(saveOutfitRemote({date, slot, itemIds, tripId, photoPath}), 10000, 'Saving');
+    queueDrop(e => e.worn_on===date && e.slot===slot);          // a direct save supersedes anything parked for that day and slot
+    netOk(); patchServerOutfit({id, date, slot, itemIds, tripId, photoPath}); state.syncedAt = Date.now(); saveSnapshot(); updateNetBar();
+    return { queued:false, photoDropped: !!photo && !photoPath };
+  } catch (e) { if (isNetError(e)){ netFailed(); return park(photoPath); } throw e; }
+}
+function logToast(r, n, slotLabel){
+  if (r.queued) return toast(r.photoDropped ? 'Saved on this phone without the photo · will sync' : 'Saved on this phone · will sync', 4000);
+  if (r.photoDropped) return toast(`Logged ${n} item${n===1?'':'s'} · the photo did not upload`, 4000);
+  toast(`Logged ${n} item${n===1?'':'s'}${slotLabel ? ' · ' + slotLabel : ''}`);
+}
+/* Send parked logs, oldest first. Runs on `online`, on app open, when the app
+   comes back to the foreground, on a slow timer, and when the indicator is tapped. */
+let flushing = false;
+async function flushQueue({manual=false}={}){
+  if (flushing) return;
+  const q = readQueue().sort((a,b) => a.queued_at - b.queued_at);
+  if (!q.length){ updateNetBar(); return; }
+  if (offline()){ if (manual) toast('Still offline · will sync when you have signal', 3500); return; }
+  flushing = true; updateNetBar();
+  let done = 0, lastErr = null;
+  for (const e of q){
+    try {
+      const id = await withTimeout(saveOutfitRemote({date:e.worn_on, slot:e.slot, itemIds:e.item_ids, tripId:e.trip_id, photoPath:e.photo_ref||null}), 15000, 'Syncing');
+      queueDrop(x => x.worn_on===e.worn_on && x.slot===e.slot && x.queued_at===e.queued_at);   // not if it was re-saved meanwhile
+      patchServerOutfit({id, date:e.worn_on, slot:e.slot, itemIds:e.item_ids, tripId:e.trip_id, photoPath:e.photo_ref||null});
+      done++; netOk();
+    } catch (err) { lastErr = err; console.warn('sync failed', e, err); if (isNetError(err)){ netFailed(); break; } }
+  }
+  flushing = false;
+  if (done){ state.syncedAt = Date.now(); saveSnapshot(); toast(`Synced ${done} log${done===1?'':'s'}`); if (!busyEditing()) render({keepScroll:true}); }
+  else if (manual) toast(isNetError(lastErr) ? 'No connection yet · will keep trying' : `Could not sync: ${(lastErr && lastErr.message) || lastErr}`, 4000);
+  updateNetBar();
+}
+/* Status line above every tab: snapshot banner + the waiting-to-sync indicator. */
+function updateNetBar(){
+  const el = $('#net'); if (!el) return;
+  const q = readQueue(), parts = [];
+  if (state.ready && (!state.fresh || offline())) parts.push(`<span>Offline · last synced ${esc(fmtSynced(state.syncedAt))}</span>`);
+  if (q.length) parts.push(`<button type="button" id="net-q">${q.length} log${q.length===1?'':'s'} waiting to sync${flushing ? ' · syncing…' : ''}</button>`);
+  el.innerHTML = parts.join(''); el.hidden = !parts.length;
+  const b = $('#net-q'); if (b) b.onclick = () => flushQueue({manual:true});
+}
+/* Network load. Whenever it lands, the screen is refreshed and the banner goes. */
+let refreshing = null;
+function refresh(){
+  if (refreshing) return refreshing;
+  refreshing = fetchAll().then(d => {
+    netOk(); applyData(d, true, Date.now()); state.ready = true; saveSnapshot(); updateNetBar();
+    if (itemUI.partial){ itemUI.photos = null; itemUI.partial = false; }
+    if (!busyEditing()) render({keepScroll:true});
+    setTimeout(flushQueue, 0);
+  }, e => { if (isNetError(e)) netFailed(); throw e; }).finally(() => { refreshing = null; });
+  return refreshing;
+}
+function busyEditing(){ return route().seg[0] === 'item' && !!itemUI.editing; }
+/* Online-only writes: each waits a bounded time, then fails with a message (the button stays as Retry). */
 async function savePlan(occasionId, itemIds){
-  const del = await sb.from('occasion_items').delete().eq('occasion_id', occasionId); if (del.error) throw del.error;
-  if (itemIds.length){ const ins = await sb.from('occasion_items').insert(itemIds.map(item_id => ({occasion_id:occasionId, item_id}))); if (ins.error) throw ins.error; }
-  await reloadTrips();
+  const del = await withTimeout(sb.from('occasion_items').delete().eq('occasion_id', occasionId), 10000, 'Saving the plan'); if (del.error) throw del.error;
+  if (itemIds.length){ const ins = await withTimeout(sb.from('occasion_items').insert(itemIds.map(item_id => ({occasion_id:occasionId, item_id}))), 10000, 'Saving the plan'); if (ins.error) throw ins.error; }
+  await withTimeout(reloadTrips(), 10000, 'Reloading the trip');
 }
 async function updateItem(id, patch){
-  const { data, error } = await sb.from('items').update(patch).eq('id', id).select(ITEM_COLS).single();
+  const { data, error } = await withTimeout(sb.from('items').update(patch).eq('id', id).select(ITEM_COLS).single(), 12000, 'Saving');
   if (error) throw error;
-  setItems(state.items.map(i => i.id===id ? data : i));
+  setItems(state.items.map(i => i.id===id ? data : i)); saveSnapshot();
   return data;
 }
 async function listItemPhotos(it){
   const prefix = photoPrefix(it);
-  const { data, error } = await sb.storage.from(BUCKET).list('', { limit:200, search:prefix, sortBy:{column:'name',order:'asc'} });
+  const { data, error } = await withTimeout(sb.storage.from(BUCKET).list('', { limit:200, search:prefix, sortBy:{column:'name',order:'asc'} }), NET_TIMEOUT, 'Listing photos');
   if (error) throw error;
   const files = (data||[]).filter(f => f.name.startsWith(prefix) && !f.name.endsWith('/')).map(f => f.name);
   // legacy cover not matching the prefix (e.g. bucket-prefixed photo_ref) still counts if it exists
   const cover = stripBucket(it.photo_ref);
   if (cover && !files.includes(cover)){
-    const { data: probe } = await sb.storage.from(BUCKET).list('', { limit:1, search:cover });
+    const { data: probe } = await withTimeout(sb.storage.from(BUCKET).list('', { limit:1, search:cover }), NET_TIMEOUT, 'Listing photos');
     if (probe && probe.some(f=>f.name===cover)) files.unshift(cover);
   }
   return files;
@@ -675,8 +850,8 @@ function dominantHex(im){
   return '#' + hx(best.r/best.n) + hx(best.g/best.n) + hx(best.b/best.n);
 }
 async function sampleFromUrl(url){ const im = await loadImageEl(url + (url.includes('?')?'&':'?') + 'v=' + Date.now(), true); return dominantHex(im); }
-async function uploadBlob(path, blob, upsert=false){
-  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert, cacheControl:'3600' });
+async function uploadBlob(path, blob, upsert=false, ms=45000){
+  const { error } = await withTimeout(sb.storage.from(BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert, cacheControl:'3600' }), ms, 'The upload');
   if (error) throw error; return path;
 }
 function pickFile(camera=false){
@@ -694,7 +869,7 @@ function pickFile(camera=false){
 function swatchHTML(it, cls=''){
   const bg = it.swatch_hex || '#3A3F46';
   const url = it.photo_ref ? publicUrl(it.photo_ref) : null;
-  return `<span class="sw ${cls}" style="background:${esc(bg)}">${url ? `<img src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>`;
+  return `<span class="sw ${cls}" style="background:${esc(bg)}">${url ? `<img src="${esc(url)}" alt="" loading="lazy" crossorigin="anonymous" onerror="this.remove()">` : ''}</span>`;
 }
 function itemRowHTML(it, {end='', check=null, href=null, cls=''}={}){
   const inner = `${swatchHTML(it)}<span class="rowmain"><span class="name">${esc(it.name)}</span>${it.brand?`<span class="brand">${esc(it.brand)}</span>`:''}</span>${end?`<span class="rowend ${end.cls||''}">${esc(end.text||end)}</span>`:''}${check!==null?'<span class="check"></span>':''}`;
@@ -714,12 +889,13 @@ function route(){
   return { seg, q:new URLSearchParams(qs||'') };
 }
 function go(hash){ location.hash = hash; }
-window.addEventListener('hashchange', render);
+window.addEventListener('hashchange', () => render());
 
-function render(){
+function render(opts={}){
   if (!state.ready) return;
   const { seg } = route();
   const view = $('#view');
+  const keepY = opts.keepScroll ? window.scrollY : 0;
   window.scrollTo(0,0);
   try {
     switch (seg[0]){
@@ -730,6 +906,7 @@ function render(){
       case 'item': setNav('closet'); renderItem(Number(seg[1])); break;
       default: go('#/today');
     }
+    if (keepY) window.scrollTo(0, keepY);
   } catch (e) { fail('draw this screen', e); }
 }
 
@@ -763,8 +940,8 @@ function dayHTML(date){
       const its = o.items.map(id=>state.itemById.get(id)).filter(Boolean);
       const photo = o.photo_ref ? publicUrl(o.photo_ref) : null;
       parts.push(`<section class="stack tight">
-        <div class="between"><span class="lbl ${o.slot==='primary'?'':'accent'}">${esc(SLOT[o.slot]||o.slot)} · ${its.length}${o.trip_id?' · TRIP':''}</span><button class="linkbtn" data-edit="${o.id}" data-date="${o.worn_on}" data-slot="${o.slot}">Edit</button></div>
-        ${photo ? `<a href="${esc(photo)}" target="_blank" rel="noopener" style="display:flex;gap:12px;align-items:center;color:inherit"><img src="${esc(photo)}" alt="Outfit photo" style="width:96px;height:128px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><span class="small muted">Outfit photo. It shows in the Looks strip of each item.</span></a>` : ''}
+        <div class="between"><span class="lbl ${o.slot==='primary'?'':'accent'}">${esc(SLOT[o.slot]||o.slot)} · ${its.length}${o.trip_id?' · TRIP':''}${o.queued?' · WAITING TO SYNC':''}</span><button class="linkbtn" data-edit="${o.id}" data-date="${o.worn_on}" data-slot="${o.slot}">Edit</button></div>
+        ${photo ? `<a href="${esc(photo)}" target="_blank" rel="noopener" style="display:flex;gap:12px;align-items:center;color:inherit"><img src="${esc(photo)}" alt="Outfit photo" crossorigin="anonymous" onerror="this.remove()" style="width:96px;height:128px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><span class="small muted">Outfit photo. It shows in the Looks strip of each item.</span></a>` : ''}
         <div class="rows">${its.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`})).join('')}</div>
       </section>`);
     }
@@ -813,11 +990,11 @@ function bindDay(date){
   $$('[data-edit]').forEach(b => b.addEventListener('click', ()=>openPicker({date:b.dataset.date, slot:b.dataset.slot})));
   bindCalendar(date);
   $('#wearagain')?.addEventListener('click', async e => {
-    const btn=e.currentTarget; const prev = state.outfits.find(o=>o.id===Number(btn.dataset.outfit)); if (!prev) return;
+    const btn=e.currentTarget; const prev = state.outfits.find(o=>String(o.id)===btn.dataset.outfit); if (!prev) return;
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
-      await saveOutfit({date, slot:'primary', itemIds:prev.items, tripId:tripForDate(date)?.id});
-      toast(`Logged ${prev.items.length} items`); render();
+      const r = await logOutfit({date, slot:'primary', itemIds:prev.items.slice(), tripId:tripForDate(date)?.id});
+      logToast(r, prev.items.length); render();
     } catch(err){ fail('save the outfit', err); btn.disabled=false; btn.textContent='Wear again'; }
   });
 }
@@ -850,7 +1027,7 @@ async function openPicker(opts){
 async function loadPickerExisting(){
   if (picker.mode !== 'outfit'){ picker.loading=false; drawPicker(); return; }
   try {
-    const ex = await fetchOutfit(picker.date, picker.slot);
+    const ex = await existingOutfit(picker.date, picker.slot);
     if (!picker) return;
     picker.existing = ex;
     if (!picker.prefilled){
@@ -905,7 +1082,7 @@ function drawPicker(){
       ${suggPossible.length ? `<div class="lbl grouphead">Possible · partly hidden</div><div class="rows">${suggPossible.map(s=>itemRowHTML(s.it,{check:p.picked.has(s.it.id), end:{text:s.why}})).join('')}</div>` : ''}
       ${recent.length ? `<div class="lbl grouphead">Worn lately</div><div class="rows">${rowsHTML(recent.filter(i=>!shownIds.has(i.id)))}</div>` : ''}
       ${rest.map(g=>`<div class="lbl grouphead">${esc(g.label)} · ${g.items.length}</div><div class="rows">${rowsHTML(g.items.filter(i=>!shownIds.has(i.id)))}</div>`).join('')}
-      ${!list.length && !p.loading ? `<div class="empty">Nothing matches${p.query.trim()?` “${esc(p.query.trim())}”`:''}.</div><button type="button" class="btn outline" id="pk-additem">+ Add item</button>` : ''}
+      ${!list.length && !p.loading ? `<div class="empty">Nothing matches${p.query.trim()?` “${esc(p.query.trim())}”`:''}.</div><button type="button" class="btn outline" id="pk-additem"${offAttr()}>+ Add item</button>${offline() ? '<div class="needsnet" style="padding-top:6px">Adding an item needs a connection</div>' : ''}` : ''}
       ${hiddenCount ? `<button class="btn dashed" id="pk-showall" style="margin-top:16px">Show ${hiddenCount} hidden by the dress code / storage</button>` : ''}
     </div>
     <div class="sheet-foot">
@@ -942,7 +1119,7 @@ function bindPickerBody(){
     if (picker.mode==='plan'){ drawPickerBody(); }
   });
   $('#pk-showall')?.addEventListener('click', ()=>{ picker.showAll=true; drawPickerBody(); });
-  $('#pk-additem')?.addEventListener('click', ()=>openAdder({fromPicker:true, hintName:picker.query.trim()}));
+  $('#pk-additem')?.addEventListener('click', ()=>{ if (offline()) return needNet(); openAdder({fromPicker:true, hintName:picker.query.trim()}); });
 }
 async function savePicker(){
   const p = picker; if (!p || !p.picked.size) return;
@@ -950,14 +1127,13 @@ async function savePicker(){
   const ids = [...p.picked];
   try {
     if (p.mode==='plan'){
+      if (offline()){ needNet(); btn.disabled=false; btn.textContent=p.saveLabel; return; }
       await savePlan(p.occasion.id, ids);
       toast(`Planned ${ids.length} items`); closePicker(); render(); return;
     }
-    let photoPath = null;
-    if (p.photo){ photoPath = await uploadBlob(`outfits/${p.date}-${p.slot}.jpg`, p.photo.blob, true); }
     const tripId = p.trip?.id || tripForDate(p.date)?.id || null;
-    await saveOutfit({date:p.date, slot:p.slot, itemIds:ids, tripId, photoPath});
-    toast(`Logged ${ids.length} item${ids.length===1?'':'s'} · ${SLOT[p.slot]}`);
+    const r = await logOutfit({date:p.date, slot:p.slot, itemIds:ids, tripId, photo:p.photo});
+    logToast(r, ids.length, SLOT[p.slot]);
     const date = p.date; closePicker();
     if (route().seg[0]==='trip') render(); else go(date===todayISO() ? '#/today' : `#/day/${date}`);
     if (location.hash.replace(/^#\/?/,'')===(date===todayISO()?'today':`day/${date}`)) render();
@@ -997,7 +1173,7 @@ function occasionCardHTML(tr, o){
   const its = planned.map(id=>state.itemById.get(id)).filter(Boolean);
   const worn = outfitFor(o.occasion_date, o.slot);
   const missing = planned.length ? missingLayers(planned) : [];
-  const head = `<div class="between" style="align-items:center"><span class="lbl ${planned.length?'accent':''}">${esc((SLOT[o.slot]||o.slot).toUpperCase())}${worn?' · LOGGED':''}</span>${planned.length?`<button class="linkbtn" data-plan="${o.id}" style="padding:6px 0 6px 12px;min-height:32px;font-size:13px">Edit plan</button>`:''}</div>
+  const head = `<div class="between" style="align-items:center"><span class="lbl ${planned.length?'accent':''}">${esc((SLOT[o.slot]||o.slot).toUpperCase())}${worn?(worn.queued?' · LOGGED · WAITING TO SYNC':' · LOGGED'):''}</span>${planned.length?`<button class="linkbtn" data-plan="${o.id}"${offAttr()} style="padding:6px 0 6px 12px;min-height:32px;font-size:13px">Edit plan</button>`:''}</div>
     <h2>${esc(o.name)}</h2>${o.dress_code?`<div class="small muted">${esc(o.dress_code)}</div>`:''}${o.notes?`<div class="small muted">${esc(o.notes)}</div>`:''}`;
   if (worn){
     const wits = worn.items.map(id=>state.itemById.get(id)).filter(Boolean);
@@ -1007,7 +1183,7 @@ function occasionCardHTML(tr, o){
     </div>`;
   }
   if (!planned.length){
-    return `<div class="card">${head}<button class="btn dashed" data-plan="${o.id}">Plan this outfit</button><button class="btn" data-wore-adhoc="${o.id}">Log what I wore</button></div>`;
+    return `<div class="card">${head}<button class="btn dashed" data-plan="${o.id}"${offAttr()}>Plan this outfit</button>${offline() ? '<div class="needsnet">Planning needs a connection</div>' : ''}<button class="btn" data-wore-adhoc="${o.id}">Log what I wore</button></div>`;
   }
   return `<div class="card accent">${head}
     <div class="rows">${its.map(i=>itemRowHTML(i)).join('')}${missing.map(m=>`<div class="warnrow"><span class="sw sm dashed"></span><span class="txt">${esc(m)}</span></div>`).join('')}</div>
@@ -1019,7 +1195,7 @@ function bindTrip(){
   $$('.daychips button').forEach(b => b.onclick = () => { state.tripDay=b.dataset.day; render(); });
   const tr = currentTrip(); if (!tr) return;
   const occ = id => tr.trip_occasions.find(o=>o.id===Number(id));
-  $$('[data-plan]').forEach(b => b.onclick = () => { const o=occ(b.dataset.plan); openPicker({mode:'plan', date:o.occasion_date, slot:o.slot, occasion:o, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save plan'}); });
+  $$('[data-plan]').forEach(b => b.onclick = () => { if (offline()) return needNet(); const o=occ(b.dataset.plan); openPicker({mode:'plan', date:o.occasion_date, slot:o.slot, occasion:o, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save plan'}); });
   $$('[data-swap]').forEach(b => b.onclick = () => { const o=occ(b.dataset.swap); openPicker({date:o.occasion_date, slot:o.slot, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save as worn'}); });
   $$('[data-wore-adhoc]').forEach(b => b.onclick = () => { const o=occ(b.dataset.woreAdhoc); openPicker({date:o.occasion_date, slot:o.slot, trip:tr}); });
   $$('[data-edit-worn]').forEach(b => b.onclick = () => { const o=occ(b.dataset.editWorn); openPicker({date:o.occasion_date, slot:o.slot, trip:tr}); });
@@ -1036,10 +1212,10 @@ function bindTrip(){
     const o = occ(b.dataset.wore); const ids=(o.occasion_items||[]).map(r=>r.item_id); if (!ids.length) return;
     b.disabled=true; b.textContent='Saving…';
     try {
-      const existing = await fetchOutfit(o.occasion_date, o.slot);
+      const existing = await existingOutfit(o.occasion_date, o.slot);
       if (existing && existing.items.length && !confirm(`${SLOT[o.slot]} on ${fmtShort(o.occasion_date)} is already logged with ${existing.items.length} items. Replace it with the plan?`)){ b.disabled=false; b.textContent='Wore this'; return; }
-      await saveOutfit({date:o.occasion_date, slot:o.slot, itemIds:ids, tripId:tr.id});
-      toast(`Logged ${ids.length} items · ${SLOT[o.slot]}`); render();
+      const r = await logOutfit({date:o.occasion_date, slot:o.slot, itemIds:ids, tripId:tr.id});
+      logToast(r, ids.length, SLOT[o.slot]); render();
     } catch(e){ fail('log the outfit', e); b.disabled=false; b.textContent='Wore this'; }
   });
 }
@@ -1098,16 +1274,30 @@ function closetHTML(){
     body = grouped(list).map(g=>`<div class="lbl grouphead">${esc(g.label)} · ${g.items.length}</div><div class="rows">${g.items.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`, end:priceText(i)})).join('')}</div>`).join('') || '<div class="empty">Nothing matches.</div>';
   }
   return `<div class="stack" style="gap:14px">
-    <div class="between" style="align-items:center"><h1 class="sm">Closet</h1><span style="display:flex;align-items:center;gap:12px"><span class="mono">${all.length} ITEMS</span><button type="button" class="btn outline" id="cl-add" style="padding:0 14px">+ Item</button></span></div>
+    <div class="between" style="align-items:center"><h1 class="sm">Closet</h1><span style="display:flex;align-items:center;gap:12px"><span class="mono">${all.length} ITEMS</span><button type="button" class="btn outline" id="cl-add"${offAttr()} style="padding:0 14px">+ Item</button></span></div>
+    ${offline() ? '<div class="needsnet" style="text-align:right;margin-top:-8px">Adding an item needs a connection</div>' : ''}
     <input type="search" class="input" id="cl-q" placeholder="Search your closet" value="${esc(state.closetQuery)}" autocomplete="off" autocorrect="off" autocapitalize="off">
     <div class="stack tight" style="gap:8px"><div class="lbl">Needs attention</div>
       <div class="counters">${Object.entries(GAPS).map(([k,g])=>`<button type="button" data-f="${k}" aria-pressed="${f===k}"><b>${all.filter(g.test).length}</b><span>${g.label}</span></button>`).join('')}</div>
     </div>
     <div>${body}</div>
+    <div class="needsnet" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:6px"><span>BUILD ${BUILD}</span><button type="button" class="linkbtn" id="cl-reset" style="padding:0;font-size:13px">Reset offline cache</button></div>
   </div>`;
 }
+/* Clears the service worker and its caches, then reloads (which installs a fresh one).
+   Sign-in, the data snapshot and any logs waiting to sync are kept. */
+async function resetOfflineCache(){
+  if (!confirm('Clear the offline app cache and reload? Your sign-in, saved data and any logs waiting to sync are kept. Do this with a connection.')) return;
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+    await Promise.all(regs.map(r => r.unregister()));
+    if (window.caches){ const keys = await caches.keys(); await Promise.all(keys.filter(k => k.startsWith('wardrobe-')).map(k => caches.delete(k))); }
+  } catch (e) { console.warn('reset failed', e); }
+  location.reload();
+}
 function bindCloset(){
-  $('#cl-add').onclick = () => openAdder();
+  $('#cl-add').onclick = () => { if (offline()) return needNet(); openAdder(); };
+  $('#cl-reset').onclick = resetOfflineCache;
   $$('.counters button').forEach(b => b.onclick = () => { state.closetFilter = state.closetFilter===b.dataset.f ? null : b.dataset.f; render(); });
   const q = $('#cl-q');
   q.oninput = () => { state.closetQuery = q.value; const pos=q.selectionStart; render(); const q2=$('#cl-q'); q2.focus(); try{q2.setSelectionRange(pos,pos);}catch{} };
@@ -1116,16 +1306,18 @@ function bindCloset(){
 /* ------------------------------------------------------------
    ITEM
    ------------------------------------------------------------ */
-const itemUI = { id:null, photos:null, slide:0, editing:null };
+const itemUI = { id:null, photos:null, slide:0, editing:null, partial:false };
 const CHEV = '<span class="chev" aria-hidden="true">›</span>';
 async function renderItem(id){
   const it = state.itemById.get(id);
   if (!it){ $('#view').innerHTML = `<div class="stack"><a class="linkbtn" href="#/closet" style="padding-left:0">‹ Closet</a><div class="empty">No item ${id}.</div></div>`; return; }
-  if (itemUI.id !== id){ itemUI.id=id; itemUI.photos=null; itemUI.slide=0; itemUI.editing=null; }
+  if (itemUI.id !== id){ itemUI.id=id; itemUI.photos=null; itemUI.slide=0; itemUI.editing=null; itemUI.partial=false; }
+  const coverOnly = () => { const c = stripBucket(it.photo_ref); itemUI.photos = c ? [c] : []; itemUI.slide = 0; itemUI.partial = true; };
+  if (itemUI.photos === null && offline()) coverOnly();     // the photo list needs the network; show the cover if the phone has it
   drawItem(it);
   if (itemUI.photos === null){
-    try { const files = await listItemPhotos(it); if (itemUI.id===id){ itemUI.photos = files; const cover=stripBucket(it.photo_ref); itemUI.slide = Math.max(0, files.indexOf(cover)); drawItem(state.itemById.get(id)); } }
-    catch(e){ itemUI.photos = []; fail('list photos', e); drawItem(state.itemById.get(id)); }
+    try { const files = await listItemPhotos(it); if (itemUI.id===id){ itemUI.photos = files; itemUI.partial = false; const cover=stripBucket(it.photo_ref); itemUI.slide = Math.max(0, files.indexOf(cover)); drawItem(state.itemById.get(id)); } }
+    catch(e){ if (itemUI.id!==id) return; if (isNetError(e)) coverOnly(); else { itemUI.photos = []; fail('list photos', e); } drawItem(state.itemById.get(id)); }
   }
 }
 function drawItem(it){
@@ -1152,17 +1344,17 @@ function drawItem(it){
   })[k];
   const fieldHTML = (k,label,isGap) => {
     if (itemUI.editing===k) return editRowHTML(it,k,label);
-    if (isGap) return `<button type="button" class="field gap" data-edit="${k}"><span class="k">${esc(label)}</span><span class="v"><span class="btn warn small" style="pointer-events:none">Add</span></span>${CHEV}</button>`;
-    return `<button type="button" class="field" data-edit="${k}"><span class="k">${esc(label)}</span><span class="v">${esc(valueOf(k))}</span>${CHEV}</button>`;
+    if (isGap) return `<button type="button" class="field gap" data-edit="${k}"${offAttr()}><span class="k">${esc(label)}</span><span class="v"><span class="btn warn small" style="pointer-events:none">Add</span></span>${CHEV}</button>`;
+    return `<button type="button" class="field" data-edit="${k}"${offAttr()}><span class="k">${esc(label)}</span><span class="v">${esc(valueOf(k))}</span>${CHEV}</button>`;
   };
   const gapRows = gaps.filter(g=>g[2]).map(([k,l])=>fieldHTML(k,l,true)).join('');
   const knownGapRows = gaps.filter(g=>!g[2]).map(([k,l])=>fieldHTML(k,l,false)).join('');
-  const knownRows = known.map(([k,l,v]) => itemUI.editing===k ? editRowHTML(it,k,l) : `<button type="button" class="field" data-edit="${k}"><span class="k">${esc(l)}</span><span class="v">${esc(v)}</span>${CHEV}</button>`).join('');
+  const knownRows = known.map(([k,l,v]) => itemUI.editing===k ? editRowHTML(it,k,l) : `<button type="button" class="field" data-edit="${k}"${offAttr()}><span class="k">${esc(l)}</span><span class="v">${esc(v)}</span>${CHEV}</button>`).join('');
 
   let carousel;
   if (photos === null) carousel = `<div class="slide plate" style="background:${esc(it.swatch_hex||'#3A3F46')}">loading photos…</div>`;
   else if (!photos.length) carousel = `<div class="slide plate" style="background:${esc(it.swatch_hex||'#3A3F46')}">No photo</div>`;
-  else carousel = photos.map((p,i)=>`<div class="slide" data-i="${i}"><img src="${esc(publicUrl(p))}" alt="${esc(it.name)} photo ${i+1}"><div class="badges">${p===cover?'<span class="badge cover">COVER</span>':''}<span class="badge">${esc(kindOfPhoto(p,it))}</span></div></div>`).join('');
+  else carousel = photos.map((p,i)=>`<div class="slide" data-i="${i}" style="background:${esc(it.swatch_hex||'#3A3F46')}"><img src="${esc(publicUrl(p))}" alt="${esc(it.name)} photo ${i+1}" crossorigin="anonymous" onerror="this.remove()"><div class="badges">${p===cover?'<span class="badge cover">COVER</span>':''}<span class="badge">${esc(kindOfPhoto(p,it))}</span></div></div>`).join('');
   const cur = photos && photos.length ? photos[Math.min(itemUI.slide, photos.length-1)] : null;
 
   $('#view').innerHTML = `<div class="stack" style="gap:14px">
@@ -1172,8 +1364,8 @@ function drawItem(it){
       <div class="between" style="align-items:center">
         <div class="dots">${photos&&photos.length>1?photos.map((_,i)=>`<i class="${i===itemUI.slide?'on':''}"></i>`).join('')+`<span class="mono" style="padding-left:6px">${itemUI.slide+1} / ${photos.length}</span>`:''}</div>
         <div style="display:flex;gap:8px">
-          <button class="btn small" id="it-addphoto">+ Photo</button>
-          ${cur && cur!==cover ? `<button class="btn small outline" id="it-cover">Set as cover</button>` : ''}
+          <button class="btn small" id="it-addphoto"${offAttr()}>+ Photo</button>
+          ${cur && cur!==cover ? `<button class="btn small outline" id="it-cover"${offAttr()}>Set as cover</button>` : ''}
         </div>
       </div>
     </div>
@@ -1183,15 +1375,15 @@ function drawItem(it){
       <div class="small muted">${w.n ? `Worn ${w.n===1?'once':w.n===2?'twice':w.n+' times'} · last ${esc(relDay(w.last))}` : 'Never worn'}</div>
     </div>
     ${looks.length ? `<div class="stack tight" style="gap:8px"><div class="between"><span class="lbl">Looks · ${looks.length}</span><span class="mono" style="text-transform:none;letter-spacing:0">outfit photos it's in</span></div>
-      <div class="looks">${looks.map(o=>`<a class="look" href="${o.worn_on===todayISO()?'#/today':`#/day/${o.worn_on}`}"><img src="${esc(publicUrl(o.photo_ref))}" alt=""><span>${esc(fmtLabel(o.worn_on))}</span></a>`).join('')}</div></div>` : ''}
+      <div class="looks">${looks.map(o=>`<a class="look" href="${o.worn_on===todayISO()?'#/today':`#/day/${o.worn_on}`}"><img src="${esc(publicUrl(o.photo_ref))}" alt="" crossorigin="anonymous" onerror="this.remove()"><span>${esc(fmtLabel(o.worn_on))}</span></a>`).join('')}</div></div>` : ''}
     <div class="rows">
       ${gapRows}
       <div class="field"><span class="k">Colour</span><span class="v"><span class="sw" style="background:${esc(it.swatch_hex||'#3A3F46')}"></span>${it.swatch_source==='photo'?'from cover photo':'from colour name'}</span></div>
       ${knownGapRows}
       ${knownRows}
     </div>
-    ${itemUI.editing==='notes' ? editRowHTML(it,'notes','Notes') : `<button type="button" class="field notesrow" data-edit="notes"><span class="notes">${it.notes ? esc(it.notes) : 'Add a note'}</span>${CHEV}</button>`}
-    <div class="hint">Photos are never deleted here. Changing the cover re-samples the colour.</div>
+    ${itemUI.editing==='notes' ? editRowHTML(it,'notes','Notes') : `<button type="button" class="field notesrow" data-edit="notes"${offAttr()}><span class="notes">${it.notes ? esc(it.notes) : 'Add a note'}</span>${CHEV}</button>`}
+    <div class="hint">${offline() ? 'Offline: photos and edits need a connection. Logging outfits still works.' : 'Photos are never deleted here. Changing the cover re-samples the colour.'}</div>
   </div>`;
   bindItem(it);
 }
@@ -1221,6 +1413,7 @@ function bindItem(it){
   if (itemUI.photos && itemUI.photos.length) requestAnimationFrame(()=>{ car.scrollLeft = itemUI.slide*308; });
 
   $('#it-addphoto').onclick = async () => {
+    if (offline()) return needNet();
     const file = await pickFile(); if (!file) return;
     toast('Uploading…');
     try {
@@ -1238,6 +1431,7 @@ function bindItem(it){
     } catch(e){ fail('upload the photo', e); }
   };
   $('#it-cover')?.addEventListener('click', async () => {
+    if (offline()) return needNet();
     const path = itemUI.photos[itemUI.slide]; if (!path) return;
     const btn=$('#it-cover'); btn.disabled=true; btn.textContent='Sampling…';
     try {
@@ -1249,7 +1443,7 @@ function bindItem(it){
       toast(hex ? `Cover set · colour ${hex}` : 'Cover set (colour unchanged)'); drawItem(it);
     } catch(e){ fail('set the cover', e); btn.disabled=false; btn.textContent='Set as cover'; }
   });
-  $$('[data-edit]').forEach(b => b.onclick = () => { itemUI.editing = b.dataset.edit; drawItem(it); const ed=$('#ed'); if (ed && ed.focus && ed.tagName!=='DIV') ed.focus(); });
+  $$('[data-edit]').forEach(b => b.onclick = () => { if (offline()) return needNet(); itemUI.editing = b.dataset.edit; drawItem(it); const ed=$('#ed'); if (ed && ed.focus && ed.tagName!=='DIV') ed.focus(); });
   const er = $('.editrow');
   if (er){
     const k = er.dataset.editing;
@@ -1288,6 +1482,7 @@ const nz = v => { const s = String(v ?? '').trim(); return s === '' ? null : s; 
 let adder = null;
 
 function openAdder(opts={}){
+  if (offline()) return needNet();
   adder = { step:'capture', item:null, labels:[], draft:null, receipts:[], duplicates:[], dupDismissed:false,
             receiptId:null, form:null, ai:{}, error:null, abort:null, timer:null, busy:false, saved:null,
             fromPicker:!!opts.fromPicker, hintName:opts.hintName||'' };
@@ -1339,7 +1534,7 @@ async function identifyAdder(){
   const a = adder; if (!a?.item) return;
   a.step = 'loading'; a.error = null; a.abort = new AbortController(); a.t0 = Date.now(); drawAdder();
   try {
-    const { data:{ session } } = await sb.auth.getSession();
+    const { data:{ session } } = await withTimeout(sb.auth.getSession(), 8000, 'Checking your sign-in');
     if (!session) throw new Error('not signed in');
     const images = [];
     for (const p of [a.item, ...a.labels]) images.push({ media_type:'image/jpeg', data: await blobToB64(p.blob) });
@@ -1355,7 +1550,7 @@ async function identifyAdder(){
     clearInterval(a.timer);
     if (e.name === 'AbortError'){ a.step = 'capture'; drawAdder(); return; }
     initAdderForm(null);
-    a.error = e instanceof TypeError ? `Could not reach the identify service (${e.message}). Check the connection.` : ((e && e.message) || String(e));
+    a.error = isNetError(e) ? `Could not reach the identify service (${e.message}). Check the connection.` : ((e && e.message) || String(e));
   }
   clearInterval(a.timer); a.step = 'form'; drawAdder();
 }
@@ -1563,9 +1758,19 @@ async function saveAdder(){
         item_class: parent?.name === 'Collection' ? 'collectible' : parent?.name === 'Property' ? 'property' : 'wardrobe',
         status:'active', source:'app', acquired_how: (rec || price !== null) ? 'bought' : 'unknown', photo_source:'none',
       };
-      const { data, error } = await sb.from('items').insert(row).select(ITEM_COLS).single();
-      if (error) throw error;
-      s.id = data.id; s.row = data; setItems([...state.items, data]);
+      // If an earlier try timed out, the row may exist already: adopt it instead of inserting twice.
+      let data = null;
+      if (s.firstTry){
+        const found = await withTimeout(sb.from('items').select(ITEM_COLS).eq('name', row.name).eq('source','app').gte('created_at', new Date(s.firstTry - 5000).toISOString()).order('id',{ascending:false}).limit(1), 12000, 'Checking');
+        if (found.error) throw found.error;
+        data = (found.data && found.data[0]) || null;
+      }
+      s.firstTry = s.firstTry || Date.now();
+      if (!data){
+        const ins = await withTimeout(sb.from('items').insert(row).select(ITEM_COLS).single(), 25000, 'Saving the item');
+        if (ins.error) throw ins.error; data = ins.data;
+      }
+      s.id = data.id; s.row = data; setItems([...state.items, data]); saveSnapshot();
     }
     const base = `${photoPrefix(s.row)}${slug(s.row.name)}`;
     if (!s.done.photo){
@@ -1586,7 +1791,7 @@ async function saveAdder(){
     }
     if (a.receiptId && !s.done.receipt){
       step = 'link the receipt';
-      const { error } = await sb.from('acquisitions').update({ matched_item_id:s.id }).eq('id', a.receiptId).is('matched_item_id', null);
+      const { error } = await withTimeout(sb.from('acquisitions').update({ matched_item_id:s.id }).eq('id', a.receiptId).is('matched_item_id', null), 12000, 'Linking the receipt');
       if (error) throw error; s.done.receipt = true;
     }
     const id = s.id, tag = tagFor(s.row), fromPicker = a.fromPicker;
@@ -1618,20 +1823,66 @@ function showAuth(){
     // success: onAuthStateChange → start()
   };
 }
+/* Start = show something within NET_TIMEOUT. The network load and the phone's
+   snapshot race: fresh data wins if it is quick; otherwise the snapshot is
+   shown with the "Offline · last synced" line and replaced when the network lands. */
 let starting = false;
 async function start(){
   if (state.ready || starting) return; starting = true;
   $('#layer').innerHTML = '';
   $('#view').innerHTML = '<div class="loading">Loading your closet</div>';
-  try { await loadAll(); state.ready = true; render(); }
-  catch(e){ fail('load your closet', e); $('#view').innerHTML = `<div class="stack"><h1 class="sm">Couldn't load</h1><div class="hint">${esc(e.message||e)}</div><button class="btn" onclick="location.reload()">Reload</button></div>`; }
-  finally { starting = false; }
+  const snap = readSnapshot();
+  const useSnap = () => { if (state.ready || !snap) return false; applyData(snap, false, snap.savedAt); state.ready = true; render(); updateNetBar(); return true; };
+  const net = refresh(); net.catch(() => {});
+  if (offline()) useSnap();
+  try { await withTimeout(net, NET_TIMEOUT, 'Loading'); }
+  catch (e) {
+    if (!state.ready && !useSnap()){
+      // nothing saved on this phone yet: keep waiting for the network, and say so
+      if (e instanceof TimeoutError) $('#view').innerHTML = '<div class="loading">Slow connection · still loading</div>';
+      try { await net; } catch (e2) { showLoadError(e2); }
+    }
+  }
+  starting = false; updateNetBar();
 }
-async function main(){
-  sb.auth.onAuthStateChange((_ev, session) => { if (session) start(); else if (state.ready) { state.ready=false; showAuth(); } });
-  const { data:{ session } } = await sb.auth.getSession();
-  if (session) start(); else showAuth();
+function showLoadError(e){
+  $('#view').innerHTML = `<div class="stack"><h1 class="sm">Can't load yet</h1><div class="hint">${isNetError(e) ? 'No connection, and nothing is saved on this phone yet. Open the app once with signal; after that it opens offline.' : esc((e && e.message) || e)}</div><button class="btn" id="retryload">Retry</button></div>`;
+  $('#retryload').onclick = () => start();
+}
+/* supabase-js keeps the session in localStorage. With no signal it cannot refresh
+   the access token: getSession() then retries for ~25 s and reports "no session",
+   although the stored session is intact. So the app never asks supabase-js whether
+   it is signed in at boot. A stored refresh token means signed in; the sign-in
+   screen appears only when there is genuinely no stored session, or when
+   supabase-js itself removes it (SIGNED_OUT after the server rejected the token). */
+const AUTH_KEY = 'sb-' + new URL(CFG.url).hostname.split('.')[0] + '-auth-token';
+function hasStoredSession(){
+  try { const v = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); return !!(v && (v.refresh_token || v.currentSession?.refresh_token)); }
+  catch { return false; }
+}
+function main(){
   if (!location.hash) location.hash = '#/today';
+  sb.auth.onAuthStateChange(ev => {
+    // supabase calls must not run inside this callback, so everything is deferred
+    if (ev === 'SIGNED_IN') setTimeout(() => { if (!state.ready) start(); }, 0);
+    else if (ev === 'TOKEN_REFRESHED') setTimeout(() => { flushQueue(); if (state.ready && !state.fresh) refresh().catch(() => {}); }, 0);
+    else if (ev === 'SIGNED_OUT') setTimeout(() => { if (!hasStoredSession()){ state.ready = false; state.fresh = false; updateNetBar(); showAuth(); } }, 0);
+  });
+  window.addEventListener('online', () => { updateNetBar(); if (state.ready && !busyEditing()) render({keepScroll:true}); if (state.ready) refresh().catch(() => {}); flushQueue(); });
+  window.addEventListener('offline', () => { updateNetBar(); if (state.ready && !busyEditing()) render({keepScroll:true}); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !state.ready) return;
+    flushQueue();
+    if (!state.fresh || Date.now() - state.syncedAt > 5 * 60 * 1000) refresh().catch(() => {});
+  });
+  // navigator.onLine is unreliable on a phone (wifi without internet reads as online), so also retry on a slow timer
+  setInterval(() => {
+    if (document.visibilityState !== 'visible' || !state.ready || offline()) return;
+    if (readQueue().length) flushQueue();
+    if (!state.fresh) refresh().catch(() => {});
+  }, 45000);
+  updateNetBar();
+  if (hasStoredSession()) start(); else showAuth();
 }
 main();
 </script>
