@@ -386,7 +386,7 @@ function relDay(iso){ const t=todayISO(); if (iso===t) return 'today'; if (iso==
 const SLOT = { primary:'Day', evening:'Evening', gym:'Gym', bed:'Bed', travel:'Travel' };
 const PICK_SLOTS = ['primary','evening','gym','travel'];
 const FORMALITY = {1:'lounge',2:'casual',3:'smart casual',4:'cocktail',5:'suit & tie'};
-const LOCATIONS = ['Coat rack','Dresser','Closet','Cedar chest','Bureau','Storage unit'];
+const LOCATIONS = ['Coat rack','Shoe rack','Basket','Dresser','Closet','Cedar chest','Bureau','Storage unit'];
 const SEASONS = ['spring','summer','fall','winter'];
 const PREFIX = { wardrobe:'WD', collectible:'CL', property:'PR' };
 const tagFor = it => (PREFIX[it.item_class]||'WD') + '-' + pad(it.id,3);
