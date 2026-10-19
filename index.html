@@ -277,6 +277,13 @@ nav#nav a[aria-current="page"]{color:var(--accent);font-weight:600}
 .seg.c5 button b{font-size:15px;font-weight:600}
 .seg.c5 button span{font-size:10px;text-align:center}
 
+/* ---- selfie review ---- */
+.sfrow{border-bottom:1px solid var(--row);padding:4px 0}
+.sfrow.low .row[role="checkbox"]{outline:1.5px solid var(--warn-line);outline-offset:4px;border-radius:8px}
+.sfrow.missing .row{min-height:52px}
+.sfalts{padding:4px 0 8px 38px;display:flex;flex-direction:column;gap:6px}
+#layer0 .sheet{z-index:35}
+
 /* ---- messages ---- */
 #fatal{position:fixed;left:0;right:0;top:0;z-index:100;background:var(--danger);color:#fff;padding:calc(var(--sat) + 14px) 20px 14px;font-size:14px;line-height:1.5}
 #fatal .t{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:4px}
@@ -345,6 +352,7 @@ nav#nav a[aria-current="page"]{color:var(--accent);font-weight:600}
   <a href="#/trip" data-tab="trip">Trip</a>
   <a href="#/closet" data-tab="closet">Closet</a>
 </nav>
+<div id="layer0"></div>
 <div id="layer"></div>
 <div id="layer2"></div>
 <div id="err" role="alert"></div>
@@ -426,7 +434,7 @@ function fail(where, e){
 }
 
 /* ---- poor-signal plumbing ---- */
-const BUILD = '2026-10-01.2';
+const BUILD = '2026-10-19.1';
 const NET_TIMEOUT = 4000;      // how long a read may take before the phone's own copy is shown
 class TimeoutError extends Error { constructor(what){ super(`${what} timed out`); this.name = 'TimeoutError'; } }
 function withTimeout(p, ms=NET_TIMEOUT, what='The request'){
@@ -788,13 +796,6 @@ async function listItemPhotos(it){
   return files;
 }
 
-/* ---- the recognition seam: returns suggested item ids from a selfie.
-   Not built yet (needs an Anthropic key in an Edge Function). Must never
-   suggest items it cannot see; today it sees nothing. ---- */
-async function suggestItemsFromPhoto(/* blob, items */){
-  return { visible:[], possible:[] }; // possible: [{id, reason}]
-}
-
 /* ------------------------------------------------------------
    Images: resize to JPEG, sample a swatch
    ------------------------------------------------------------ */
@@ -921,7 +922,7 @@ function dayHTML(date){
   if (!logged.length){
     parts.push(`<h1>Not logged${isToday?' yet':''}</h1></div>`);
     parts.push(`<button class="btn primary big" id="logbtn">Log what I'm wearing</button>`);
-    parts.push(`<button class="btn" id="selfiebtn">Log from a selfie</button>`);
+    parts.push(`<button class="btn" id="selfiebtn"${offAttr()}>Log from selfie</button>`);
     const prev = state.outfits.find(o => o.slot==='primary' && o.worn_on < date && o.items.length);
     if (prev){
       const its = prev.items.map(id=>state.itemById.get(id)).filter(Boolean);
@@ -985,7 +986,7 @@ function bindCalendar(date){
 function shortName(it){ return String(it.name).split(/\s[—–]\s/)[0]; }
 function bindDay(date){
   $('#logbtn')?.addEventListener('click', ()=>openPicker({date, slot:'primary'}));
-  $('#selfiebtn')?.addEventListener('click', ()=>logFromSelfie(date));
+  $('#selfiebtn')?.addEventListener('click', ()=>logFromSelfie());
   $('#addslot')?.addEventListener('click', e=>openPicker({date, slot:e.currentTarget.dataset.slot}));
   $$('[data-edit]').forEach(b => b.addEventListener('click', ()=>openPicker({date:b.dataset.date, slot:b.dataset.slot})));
   bindCalendar(date);
@@ -998,17 +999,6 @@ function bindDay(date){
     } catch(err){ fail('save the outfit', err); btn.disabled=false; btn.textContent='Wear again'; }
   });
 }
-async function logFromSelfie(date){
-  const file = await pickFile(); if (!file) return;
-  toast('Preparing photo…');
-  try {
-    const { blob } = await processFile(file, 1600);
-    const url = URL.createObjectURL(blob);
-    const sugg = await suggestItemsFromPhoto(blob, state.items);
-    openPicker({date, slot:'primary', photo:{blob,url}, suggested:sugg});
-  } catch(e){ fail('read that photo', e); }
-}
-
 /* ------------------------------------------------------------
    PICKER (log an outfit / plan an occasion)
    ------------------------------------------------------------ */
@@ -1020,12 +1010,13 @@ async function openPicker(opts){
     occasion: opts.occasion || null, trip: opts.trip || null,
     picked: new Set(opts.prefill || []), photo: opts.photo || null, suggested: opts.suggested || null,
     query:'', showAll:false, saveLabel: opts.saveLabel || 'Save', existing:null, loading:true, prefilled: !!opts.prefill,
+    onDone: opts.onDone || null,
   };
   drawPicker();
   await loadPickerExisting();
 }
 async function loadPickerExisting(){
-  if (picker.mode !== 'outfit'){ picker.loading=false; drawPicker(); return; }
+  if (picker.mode !== 'outfit' || picker.onDone){ picker.loading=false; drawPicker(); return; }
   try {
     const ex = await existingOutfit(picker.date, picker.slot);
     if (!picker) return;
@@ -1056,7 +1047,7 @@ function drawPicker(){
   const rest = grouped(list.filter(i=>!recentIds.has(i.id)));
   const hiddenCount = p.mode==='plan' && !p.showAll ? state.items.filter(it => !planAllowed(it, p.occasion) && !p.picked.has(it.id)).length : 0;
   const isPlan = p.mode==='plan';
-  const title = isPlan ? `PLAN · ${esc(fmtLabel(p.date))} · ${esc((SLOT[p.slot]||p.slot).toUpperCase())}` : `${esc(fmtLabel(p.date))}${p.trip?' · '+esc(tripShort(p.trip)):''}`;
+  const title = isPlan ? `PLAN · ${esc(fmtLabel(p.date))} · ${esc((SLOT[p.slot]||p.slot).toUpperCase())}` : p.onDone ? 'ADD TO THIS LOG' : `${esc(fmtLabel(p.date))}${p.trip?' · '+esc(tripShort(p.trip)):''}`;
   const sugg = p.suggested;
   const suggVisible = sugg?.visible?.map(id=>state.itemById.get(id)).filter(Boolean) || [];
   const suggPossible = sugg?.possible?.map(s=>({it:state.itemById.get(s.id), why:s.reason})).filter(s=>s.it) || [];
@@ -1069,10 +1060,10 @@ function drawPicker(){
     <div class="sheet-head">
       <div class="between" style="align-items:center">
         <button class="linkbtn" id="pk-cancel" style="padding-left:0">Cancel</button>
-        ${isPlan ? `<span class="lbl">${title}</span>` : `<label class="lbl datelbl">${p.trip?esc(tripShort(p.trip))+' · ':''}<input type="date" id="pk-date" value="${esc(p.date)}" aria-label="Date"></label>`}
+        ${isPlan || p.onDone ? `<span class="lbl">${title}</span>` : `<label class="lbl datelbl">${p.trip?esc(tripShort(p.trip))+' · ':''}<input type="date" id="pk-date" value="${esc(p.date)}" aria-label="Date"></label>`}
       </div>
       ${isPlan ? `<div><div style="font-weight:600">${esc(p.occasion?.name||'')}</div>${p.occasion?.dress_code?`<div class="small muted">${esc(p.occasion.dress_code)}${p.occasion.formality_min?` · formality ${p.occasion.formality_min}${p.occasion.formality_max&&p.occasion.formality_max!==p.occasion.formality_min?'–'+p.occasion.formality_max:''}`:''}</div>`:''}</div>`
-      : `<div class="seg c4" role="radiogroup" aria-label="Slot">${PICK_SLOTS.map(s=>`<button type="button" data-slot="${s}" aria-pressed="${p.slot===s}">${SLOT[s]}</button>`).join('')}</div>`}
+      : p.onDone ? '' : `<div class="seg c4" role="radiogroup" aria-label="Slot">${PICK_SLOTS.map(s=>`<button type="button" data-slot="${s}" aria-pressed="${p.slot===s}">${SLOT[s]}</button>`).join('')}</div>`}
       ${p.photo ? `<div class="photo-preview"><img src="${esc(p.photo.url)}" alt="Your selfie"><div style="display:flex;flex-direction:column;justify-content:center;gap:6px"><div style="font-size:18px;font-weight:600;line-height:1.2">${suggVisible.length?"Here's what I can see":'Photo attached'}</div><div class="hint">${suggVisible.length?"Untick anything wrong. Tick the maybes you're wearing.":'Pick what you\'re wearing. Automatic recognition isn\'t set up yet.'}</div></div></div>` : ''}
       <input type="search" class="input" id="pk-q" placeholder="Search your closet" value="${esc(p.query)}" autocomplete="off" autocorrect="off" autocapitalize="off">
     </div>
@@ -1125,6 +1116,7 @@ async function savePicker(){
   const p = picker; if (!p || !p.picked.size) return;
   const btn = $('#pk-save'); btn.disabled = true; btn.textContent = 'Saving…';
   const ids = [...p.picked];
+  if (p.onDone){ const done = p.onDone; closePicker(); done(ids); return; }
   try {
     if (p.mode==='plan'){
       if (likelyDown()){ needNet(); btn.disabled=false; btn.textContent=p.saveLabel; return; }
@@ -1485,7 +1477,7 @@ function openAdder(opts={}){
   if (likelyDown()) return needNet();
   adder = { step:'capture', item:null, labels:[], draft:null, receipts:[], duplicates:[], dupDismissed:false,
             receiptId:null, form:null, ai:{}, error:null, abort:null, timer:null, busy:false, saved:null,
-            fromPicker:!!opts.fromPicker, hintName:opts.hintName||'' };
+            fromPicker:!!opts.fromPicker, fromSelfie: Number.isInteger(opts.fromSelfie) ? opts.fromSelfie : null, hintName:opts.hintName||'' };
   drawAdder();
   window.visualViewport?.addEventListener('resize', fitAdder);
   window.visualViewport?.addEventListener('scroll', fitAdder);
@@ -1794,13 +1786,201 @@ async function saveAdder(){
       const { error } = await withTimeout(sb.from('acquisitions').update({ matched_item_id:s.id }).eq('id', a.receiptId).is('matched_item_id', null), 12000, 'Linking the receipt');
       if (error) throw error; s.done.receipt = true;
     }
-    const id = s.id, tag = tagFor(s.row), fromPicker = a.fromPicker;
+    const id = s.id, tag = tagFor(s.row), fromPicker = a.fromPicker, fromSelfie = a.fromSelfie;
     closeAdder(); itemUI.id = null; toast(`Added — ${tag}`);
     if (fromPicker && picker){ picker.picked.add(id); picker.query = ''; drawPicker(); }
+    else if (fromSelfie !== null && selfie){ selfieAddedItem(fromSelfie, id); }
     else if (location.hash === `#/item/${id}`) render(); else go(`#/item/${id}`);
   } catch (e) {
     a.busy = false; s.failed = step; drawAdder(); fail(step, e);
   }
+}
+
+/* ------------------------------------------------------------
+   LOG FROM SELFIE: photo → EXIF date → identify-outfit (returns garments
+   with ranked closet candidates, writes nothing) → review → logOutfit.
+   ------------------------------------------------------------ */
+const OUTFIT_URL = CFG.url + '/functions/v1/identify-outfit';
+const SELFIE_SLOT_LABEL = { outer:'Outer layer', top:'Top', layer:'Layer', bottom:'Bottom', shoes:'Shoes', belt:'Belt', accessory:'Accessory' };
+let selfie = null;
+
+/* EXIF DateTimeOriginal (+ OffsetTimeOriginal) straight from the JPEG's APP1 segment.
+   Must run on the ORIGINAL file: canvas re-encoding drops EXIF. Returns
+   { local:'YYYY-MM-DDTHH:MM:SS', offset:'+03:00'|null } or null. */
+function exifCaptureTime(buf){
+  try {
+    const v = new DataView(buf);
+    if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return null;
+    let off = 2;
+    while (off + 4 <= v.byteLength){
+      const marker = v.getUint16(off); if (marker === 0xFFDA || (marker & 0xFF00) !== 0xFF00) break;
+      const len = v.getUint16(off + 2);
+      if (marker === 0xFFE1 && off + 10 <= v.byteLength && v.getUint32(off + 4) === 0x45786966){   // "Exif"
+        const t = new DataView(buf, off + 10, Math.min(len - 8, v.byteLength - off - 10));
+        const le = t.getUint16(0) === 0x4949;
+        const u16 = o => t.getUint16(o, le), u32 = o => t.getUint32(o, le);
+        if (u16(2) !== 42) return null;
+        const readIFD = o => { const n = u16(o), tags = {}; for (let i = 0; i < n; i++){ const e = o + 2 + i*12; if (e + 12 > t.byteLength) break; const type = u16(e+2), cnt = u32(e+4); tags[u16(e)] = { type, cnt, off: (type === 2 && cnt > 4) || (type === 4 && cnt > 1) ? u32(e+8) : e + 8 }; } return tags; };
+        const ascii = g => { if (!g || g.type !== 2) return null; let s = ''; for (let i = 0; i < g.cnt && g.off + i < t.byteLength; i++){ const c = t.getUint8(g.off + i); if (!c) break; s += String.fromCharCode(c); } return s.trim() || null; };
+        const ifd0 = readIFD(u32(4));
+        const exif = ifd0[0x8769] ? readIFD(u32(ifd0[0x8769].off)) : {};
+        const dt = ascii(exif[0x9003]) || ascii(exif[0x9004]) || ascii(ifd0[0x0132]);
+        const m = dt && dt.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+        if (!m) return null;
+        const offset = ascii(exif[0x9011]) || ascii(exif[0x9010]) || null;
+        return { local:`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`, offset: offset && /^[+-]\d{2}:\d{2}$/.test(offset) ? offset : null };
+      }
+      off += 2 + len;
+    }
+  } catch (e) { console.warn('exif', e); }
+  return null;
+}
+/* The calendar day a capture belongs to: the camera's wall-clock time minus the 03:33 rollover. */
+function dayOfCapture(local){
+  const [h, m] = DAY_ROLLOVER.split(':').map(Number);
+  const d = new Date(local); if (isNaN(d)) return null;
+  d.setMinutes(d.getMinutes() - (h*60 + m));
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function selfieDefaultSlot(date){ return outfitFor(date, 'primary') ? 'evening' : 'primary'; }
+
+async function logFromSelfie(){
+  if (likelyDown()) return needNet();
+  const file = await pickFile(false); if (!file) return;
+  let exif = null;
+  try { exif = exifCaptureTime(await file.arrayBuffer()); } catch (e) { console.warn('exif read', e); }
+  const date = (exif && dayOfCapture(exif.local)) || todayISO();
+  selfie = { step:'loading', date, exif, dateFromPhoto: !!(exif && dayOfCapture(exif.local)), slot: selfieDefaultSlot(date),
+             photo:null, garments:[], extras:new Set(), abort:null, timer:null, t0:Date.now(), error:null, busy:false };
+  drawSelfie();
+  try {
+    const { blob } = await processFile(file, 1600);
+    if (!selfie) return;
+    selfie.photo = { blob, url: URL.createObjectURL(blob) }; drawSelfie();
+    await identifySelfie();
+  } catch (e) { if (!selfie) return; selfie.error = (e && e.message) || String(e); selfie.step = 'review'; drawSelfie(); }
+}
+async function identifySelfie(){
+  const s = selfie; s.step = 'loading'; s.error = null; s.abort = new AbortController(); s.t0 = Date.now(); drawSelfie();
+  try {
+    const { data:{ session } } = await withTimeout(sb.auth.getSession(), 8000, 'Checking your sign-in');
+    if (!session) throw new Error('not signed in');
+    const data = await blobToB64(s.photo.blob);
+    const r = await withTimeout(fetch(OUTFIT_URL, { method:'POST', signal:s.abort.signal,
+      headers:{ 'Content-Type':'application/json', apikey:CFG.key, Authorization:`Bearer ${session.access_token}` },
+      body: JSON.stringify({ image:{ media_type:'image/jpeg', data } }) }), 90000, 'Reading the outfit');
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error || `identify failed (HTTP ${r.status})`);
+    if (selfie !== s) return;
+    s.garments = (j.garments || []).map(g => {
+      const cands = (g.candidates || []).filter(c => state.itemById.has(c.item_id));
+      const top = cands[0];
+      return { slot:g.slot, seen:g.seen, candidates:cands, pick: top ? top.item_id : null, ticked: !!top && top.confidence !== 'low', open:false };
+    });
+  } catch (e) {
+    if (selfie !== s) return;
+    if (e.name === 'AbortError'){ closeSelfie(); return; }
+    s.error = isNetError(e) ? `Could not reach the identify service (${e.message}).` : ((e && e.message) || String(e));
+  }
+  clearInterval(s.timer); s.step = 'review'; drawSelfie();
+}
+function closeSelfie(){ if (!selfie) return; selfie.abort?.abort(); clearInterval(selfie.timer); if (selfie.photo?.url) URL.revokeObjectURL(selfie.photo.url); selfie = null; $('#layer0').innerHTML = ''; }
+function selfieSelected(){ const ids = new Set(selfie.garments.filter(g => g.ticked && g.pick).map(g => g.pick)); for (const id of selfie.extras) ids.add(id); return [...ids]; }
+
+function drawSelfie(){
+  const s = selfie; if (!s) return;
+  const keepScroll = $('#sf-body')?.scrollTop || 0;
+  const head = `<div class="sheet-head"><div class="between" style="align-items:center"><button type="button" class="linkbtn" id="sf-cancel" style="padding-left:0">Cancel</button><span class="lbl">Log from selfie</span></div></div>`;
+  let body;
+  if (s.step === 'loading'){
+    body = `<div class="sheet-body"><div class="stack" style="align-items:center;text-align:center;padding-top:64px">
+      ${s.photo ? `<img src="${esc(s.photo.url)}" alt="" style="width:132px;height:176px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">` : '<div style="width:132px;height:176px;border-radius:10px;background:var(--surface)"></div>'}
+      <div style="font-size:20px;font-weight:600">Reading the outfit…</div>
+      <div class="hint">Usually under fifteen seconds. <span id="sf-secs"></span></div>
+      <button type="button" class="btn" id="sf-stop">Stop</button></div></div>`;
+  } else {
+    const sel = selfieSelected();
+    const secondNote = outfitFor(s.date, 'primary') && s.slot !== 'primary' ? '<div class="needsnet" style="color:var(--accent)">You already logged this day — adding as a second outfit</div>' : '';
+    const dateRow = `<div class="frow ${s.dateFromPhoto ? '' : 'need'}" style="padding-top:0"><label class="flabel" for="sf-date">Date${s.dateFromPhoto ? ` <span class="needsnet">from the photo · ${esc(fmtLabel(s.date))}</span>` : ''}</label>
+        <input type="date" class="input" id="sf-date" value="${esc(s.date)}">${s.dateFromPhoto ? '' : '<div class="needsnet" style="color:var(--warn)">No date on photo — check</div>'}</div>
+      <div class="frow" style="padding-top:0"><span class="flabel">Slot</span><div class="seg c4" id="sf-slot">${PICK_SLOTS.map(x => `<button type="button" data-v="${x}" aria-pressed="${s.slot===x}">${SLOT[x]}</button>`).join('')}</div>${secondNote}</div>`;
+    const errBanner = s.error ? `<div class="banner"><div class="bt">Couldn't read the outfit</div><div class="small">${esc(s.error)}</div><div class="btn-row"><button type="button" class="btn small" id="sf-retry">Try again</button><button type="button" class="btn small" id="sf-byhand">Pick by hand</button></div></div>` : '';
+    const rows = s.garments.map((g, gi) => {
+      const top = g.candidates.find(c => c.item_id === g.pick) || g.candidates[0];
+      const it = top && state.itemById.get(top.item_id);
+      if (!it){
+        return `<div class="sfrow missing"><div class="row" style="border-bottom:0"><span class="sw dashed"></span><span class="rowmain"><span class="name" style="color:var(--warn)">Not in closet</span><span class="brand">${esc(SELFIE_SLOT_LABEL[g.slot]||g.slot)} · ${esc(g.seen||'')}</span></span></div>
+          <div class="btn-row"><button type="button" class="btn warn small" data-sf-add="${gi}">+ Add item</button><button type="button" class="btn small" data-sf-pickone="${gi}">Pick from closet</button></div></div>`;
+      }
+      const low = top.confidence === 'low';
+      const whyBits = [top.why, top.last_worn ? `worn ${esc(relDay(top.last_worn))}` : null].filter(Boolean).join(' · ');
+      const alts = g.open ? `<div class="sfalts">${g.candidates.filter(c => c.item_id !== top.item_id).map(c => { const a = state.itemById.get(c.item_id); return a ? `<button type="button" class="row tappable" data-sf-swap="${gi}" data-id="${c.item_id}" style="border-bottom:0">${swatchHTML(a,'sm')}<span class="rowmain"><span class="name">${esc(a.name)}</span><span class="brand">${esc(c.confidence)} · ${esc(c.why||'')}</span></span></button>` : ''; }).join('')}
+          <button type="button" class="btn small" data-sf-pickone="${gi}">Something else from the closet</button></div>` : '';
+      return `<div class="sfrow ${low ? 'low' : ''}">
+        <div class="row" style="border-bottom:0">
+          <button type="button" class="row tappable" role="checkbox" aria-checked="${g.ticked}" data-sf-tick="${gi}" style="border-bottom:0;padding:0;min-height:44px;flex:1">
+            <span class="check"></span>${swatchHTML(it)}<span class="rowmain"><span class="name">${esc(it.name)}</span><span class="brand">${esc(SELFIE_SLOT_LABEL[g.slot]||g.slot)} · ${esc(g.seen||'')}</span>${whyBits ? `<span class="needsnet" style="text-transform:none;letter-spacing:0">${low ? 'Low confidence · ' : ''}${whyBits}</span>` : ''}</span>
+          </button>
+          ${g.candidates.length > 1 || true ? `<button type="button" class="calnav" data-sf-open="${gi}" aria-label="Other candidates" style="width:36px">${g.open ? '▴' : '▾'}</button>` : ''}
+        </div>${alts}</div>`;
+    }).join('');
+    const extras = [...s.extras].map(id => state.itemById.get(id)).filter(Boolean).map(it => `<div class="sfrow"><button type="button" class="row tappable" role="checkbox" aria-checked="true" data-sf-extra="${it.id}" style="border-bottom:0;padding:0;min-height:44px"><span class="check"></span>${swatchHTML(it)}<span class="rowmain"><span class="name">${esc(it.name)}</span><span class="brand">Added by you</span></span></button></div>`).join('');
+    body = `<div class="sheet-body" id="sf-body" style="padding-top:14px"><div class="stack" style="gap:14px">
+      <div style="display:flex;gap:12px;align-items:flex-start"><img src="${esc(s.photo?.url||'')}" alt="Your selfie" style="width:84px;height:112px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:0 0 auto"><div style="flex:1;min-width:0">${dateRow}</div></div>
+      ${errBanner}
+      ${s.garments.length ? `<div class="lbl">In the photo</div><div class="rows">${rows}</div>` : (s.error ? '' : '<div class="empty">Nothing recognisable in the photo. Add items by hand below.</div>')}
+      ${extras ? `<div class="lbl">Also wearing</div><div class="rows">${extras}</div>` : ''}
+      <button type="button" class="btn dashed" id="sf-more">+ Something not in the photo</button>
+    </div></div>
+    <div class="sheet-foot"><div class="tally"><b>${sel.length}</b> <span class="muted">item${sel.length===1?'':'s'} + photo</span></div><button type="button" class="btn primary" id="sf-save" ${sel.length ? '' : 'disabled'}>Save</button></div>`;
+  }
+  $('#layer0').innerHTML = `<div class="sheet" role="dialog" aria-label="Log from selfie" style="z-index:35">${head}${body}</div>`;
+  if ($('#sf-body')) $('#sf-body').scrollTop = keepScroll;
+  bindSelfie();
+}
+function bindSelfie(){
+  const s = selfie;
+  $('#sf-cancel').onclick = () => { if (s.step === 'review' && !confirm('Discard this log?')) return; closeSelfie(); };
+  if (s.step === 'loading'){
+    const tick = () => { const el = $('#sf-secs'); if (el) el.textContent = Math.round((Date.now() - s.t0) / 1000) + ' s'; };
+    clearInterval(s.timer); s.timer = setInterval(tick, 1000); tick();
+    $('#sf-stop').onclick = () => { s.abort ? s.abort.abort() : closeSelfie(); };
+    return;
+  }
+  const dateInp = $('#sf-date');
+  dateInp.onchange = () => { if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInp.value)) return; s.date = dateInp.value; s.dateFromPhoto = false; s.slot = selfieDefaultSlot(s.date); drawSelfie(); };
+  $$('#sf-slot button').forEach(b => b.onclick = () => { s.slot = b.dataset.v; drawSelfie(); });
+  $$('[data-sf-tick]').forEach(b => b.onclick = () => { const g = s.garments[Number(b.dataset.sfTick)]; g.ticked = !g.ticked; drawSelfie(); });
+  $$('[data-sf-open]').forEach(b => b.onclick = () => { const g = s.garments[Number(b.dataset.sfOpen)]; g.open = !g.open; drawSelfie(); });
+  $$('[data-sf-swap]').forEach(b => b.onclick = () => { const g = s.garments[Number(b.dataset.sfSwap)]; g.pick = Number(b.dataset.id); g.ticked = true; g.open = false; drawSelfie(); });
+  $$('[data-sf-extra]').forEach(b => b.onclick = () => { s.extras.delete(Number(b.dataset.sfExtra)); drawSelfie(); });
+  $$('[data-sf-add]').forEach(b => b.onclick = () => { if (likelyDown()) return needNet(); const gi = Number(b.dataset.sfAdd); openAdder({ fromSelfie:gi, hintName:s.garments[gi].seen || '' }); });
+  $$('[data-sf-pickone]').forEach(b => b.onclick = () => {
+    const gi = Number(b.dataset.sfPickone);
+    openPicker({ date:s.date, slot:s.slot, prefill:[], saveLabel:'Use this', onDone: ids => { if (!selfie) return; const id = ids[0]; if (!id) return; const g = selfie.garments[gi]; if (!g.candidates.some(c => c.item_id === id)) g.candidates.unshift({ item_id:id, confidence:'high', why:'Picked by you' }); g.pick = id; g.ticked = true; g.open = false; drawSelfie(); } });
+  });
+  $('#sf-more').onclick = () => openPicker({ date:s.date, slot:s.slot, prefill:selfieSelected(), saveLabel:'Done', onDone: ids => {
+    if (!selfie) return; const P = new Set(ids);
+    for (const g of selfie.garments) if (g.pick && !P.has(g.pick)) g.ticked = false;
+    const covered = new Set(selfie.garments.filter(g => g.ticked && g.pick).map(g => g.pick));
+    selfie.extras = new Set(ids.filter(id => !covered.has(id))); drawSelfie();
+  } });
+  $('#sf-retry')?.addEventListener('click', identifySelfie);
+  $('#sf-byhand')?.addEventListener('click', () => { const p = s.photo; const date = s.date, slot = s.slot; s.photo = null; closeSelfie(); openPicker({ date, slot, photo:p }); });
+  $('#sf-save').onclick = saveSelfie;
+}
+/* The adder calls this after creating an item from a "Not in closet" row. */
+function selfieAddedItem(gi, id){ if (!selfie) return; const g = selfie.garments[gi]; if (!g) return; g.candidates.unshift({ item_id:id, confidence:'high', why:'Just added' }); g.pick = id; g.ticked = true; drawSelfie(); }
+async function saveSelfie(){
+  const s = selfie; if (!s || s.busy) return;
+  const ids = selfieSelected(); if (!ids.length) return;
+  s.busy = true; const btn = $('#sf-save'); btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await logOutfit({ date:s.date, slot:s.slot, itemIds:ids, tripId:tripForDate(s.date)?.id || null, photo:s.photo });
+    const date = s.date; logToast(r, ids.length, SLOT[s.slot]); closeSelfie();
+    go(date === todayISO() ? '#/today' : `#/day/${date}`);
+    if (location.hash.replace(/^#\/?/,'') === (date === todayISO() ? 'today' : `day/${date}`)) render();
+  } catch (e) { s.busy = false; fail('save', e); drawSelfie(); }
 }
 
 /* ------------------------------------------------------------
