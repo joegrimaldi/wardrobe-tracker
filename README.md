@@ -14,6 +14,8 @@ Phone-first outfit log. One static page (`index.html`) on GitHub Pages, data in 
 - `occasion_items` is the plan; it is never counted as a wear.
 - Closet, picker and Pack groups come from `categories.parent_id` at load time. `GROUP_DEFS` in `index.html` only sets the order and labels; a new top-level category nobody lists there becomes its own group instead of landing in Other.
 - Prices: receipt/manual `$X`, estimate `~$X`, null "no price".
+- Editing a logged outfit (Edit on Today/day view, Trip, or an item's wear history) writes only the difference on the same `outfit_id` (insert added, delete removed), keeps `photo_ref`, and can move the log to another date/slot (a clash with an existing log is refused). Unticking everything asks "Delete this whole log?". Offline, item changes are parked in the queue; moves and deletes need a connection.
+- The picker pins ticked items in a "Selected · n" section at the top, also while searching.
 - Pack-list ticks live in `localStorage` (`pack:<trip_id>`), per device, by design.
 - Photos are never deleted from the bucket; changing the cover repoints `items.photo_ref` and re-samples `swatch_hex` (`swatch_source = 'photo'`).
 - Adding an item (`+ Item` on Closet, `+ Add item` when a picker search finds nothing): photo(s) are resized to 1600 px JPEG and sent to the `identify-item` Edge Function, which returns a draft and writes nothing. Joe reviews a prefilled form; nothing is saved until Save. The app never writes `price_source = 'estimate'`: price is a receipt's, typed (`manual`), or blank. Save is ordered and resumable (insert → item photo → labels → cover + swatch → receipt link). `identify-item` only accepts calls from the live origin (CORS), so it cannot be exercised from localhost.

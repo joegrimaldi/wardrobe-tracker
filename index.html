@@ -58,6 +58,7 @@ a{color:var(--accent);text-decoration:none}
 .lbl{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .lbl.accent{color:var(--accent)}
 .lbl.warn{color:var(--warn)}
+.grouphead.accent{color:var(--accent)}
 .datelbl{display:flex;align-items:center;gap:4px;min-height:44px}
 .datelbl input{background:none;border:0;padding:0;color:var(--muted);font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;-webkit-appearance:none;appearance:none;color-scheme:dark;min-height:44px;text-align:right}
 .datelbl input::-webkit-calendar-picker-indicator{opacity:.6}
@@ -434,7 +435,7 @@ function fail(where, e){
 }
 
 /* ---- poor-signal plumbing ---- */
-const BUILD = '2026-10-19.1';
+const BUILD = '2026-10-20.1';
 const NET_TIMEOUT = 4000;      // how long a read may take before the phone's own copy is shown
 class TimeoutError extends Error { constructor(what){ super(`${what} timed out`); this.name = 'TimeoutError'; } }
 function withTimeout(p, ms=NET_TIMEOUT, what='The request'){
@@ -988,7 +989,7 @@ function bindDay(date){
   $('#logbtn')?.addEventListener('click', ()=>openPicker({date, slot:'primary'}));
   $('#selfiebtn')?.addEventListener('click', ()=>logFromSelfie());
   $('#addslot')?.addEventListener('click', e=>openPicker({date, slot:e.currentTarget.dataset.slot}));
-  $$('[data-edit]').forEach(b => b.addEventListener('click', ()=>openPicker({date:b.dataset.date, slot:b.dataset.slot})));
+  $$('[data-edit]').forEach(b => b.addEventListener('click', ()=>editLog(state.outfits.find(o => String(o.id)===b.dataset.edit))));
   bindCalendar(date);
   $('#wearagain')?.addEventListener('click', async e => {
     const btn=e.currentTarget; const prev = state.outfits.find(o=>String(o.id)===btn.dataset.outfit); if (!prev) return;
@@ -1010,13 +1011,13 @@ async function openPicker(opts){
     occasion: opts.occasion || null, trip: opts.trip || null,
     picked: new Set(opts.prefill || []), photo: opts.photo || null, suggested: opts.suggested || null,
     query:'', showAll:false, saveLabel: opts.saveLabel || 'Save', existing:null, loading:true, prefilled: !!opts.prefill,
-    onDone: opts.onDone || null,
+    onDone: opts.onDone || null, edit: opts.edit || null,
   };
   drawPicker();
   await loadPickerExisting();
 }
 async function loadPickerExisting(){
-  if (picker.mode !== 'outfit' || picker.onDone){ picker.loading=false; drawPicker(); return; }
+  if (picker.mode !== 'outfit' || picker.onDone || picker.edit){ picker.loading=false; drawPicker(); return; }
   try {
     const ex = await existingOutfit(picker.date, picker.slot);
     if (!picker) return;
@@ -1041,13 +1042,17 @@ function pickerItems(){
 function drawPicker(){
   if (!picker) return;
   const p = picker;
-  const list = pickerItems();
+  const selected = [...p.picked].map(id => state.itemById.get(id)).filter(Boolean);     // pinned on top, regardless of the search
+  const list = pickerItems().filter(it => !p.picked.has(it.id));
   const recent = list.filter(it => wearOf(it.id).n).sort((a,b)=>{ const A=wearOf(a.id),B=wearOf(b.id); return (B.last||'').localeCompare(A.last||'') || B.n-A.n; }).slice(0,12);
   const recentIds = new Set(recent.map(i=>i.id));
   const rest = grouped(list.filter(i=>!recentIds.has(i.id)));
   const hiddenCount = p.mode==='plan' && !p.showAll ? state.items.filter(it => !planAllowed(it, p.occasion) && !p.picked.has(it.id)).length : 0;
   const isPlan = p.mode==='plan';
   const title = isPlan ? `PLAN · ${esc(fmtLabel(p.date))} · ${esc((SLOT[p.slot]||p.slot).toUpperCase())}` : p.onDone ? 'ADD TO THIS LOG' : `${esc(fmtLabel(p.date))}${p.trip?' · '+esc(tripShort(p.trip)):''}`;
+  const clashWith = p.edit && (p.date !== p.edit.worn_on || p.slot !== p.edit.slot) ? outfitFor(p.date, p.slot) : null;
+  const clash = clashWith && String(clashWith.id) !== String(p.edit.id);
+  const editNote = p.edit ? `<div class="needsnet">Editing the ${esc(SLOT[p.edit.slot]||p.edit.slot)} log for ${esc(fmtLabel(p.edit.worn_on))}${p.edit.photo_ref ? ' · photo kept' : ''}${(p.date !== p.edit.worn_on || p.slot !== p.edit.slot) ? ` → moving to ${esc(fmtLabel(p.date))} · ${esc((SLOT[p.slot]||p.slot).toUpperCase())}` : ''}</div>` : '';
   const sugg = p.suggested;
   const suggVisible = sugg?.visible?.map(id=>state.itemById.get(id)).filter(Boolean) || [];
   const suggPossible = sugg?.possible?.map(s=>({it:state.itemById.get(s.id), why:s.reason})).filter(s=>s.it) || [];
@@ -1062,6 +1067,7 @@ function drawPicker(){
         <button class="linkbtn" id="pk-cancel" style="padding-left:0">Cancel</button>
         ${isPlan || p.onDone ? `<span class="lbl">${title}</span>` : `<label class="lbl datelbl">${p.trip?esc(tripShort(p.trip))+' · ':''}<input type="date" id="pk-date" value="${esc(p.date)}" aria-label="Date"></label>`}
       </div>
+      ${editNote}
       ${isPlan ? `<div><div style="font-weight:600">${esc(p.occasion?.name||'')}</div>${p.occasion?.dress_code?`<div class="small muted">${esc(p.occasion.dress_code)}${p.occasion.formality_min?` · formality ${p.occasion.formality_min}${p.occasion.formality_max&&p.occasion.formality_max!==p.occasion.formality_min?'–'+p.occasion.formality_max:''}`:''}</div>`:''}</div>`
       : p.onDone ? '' : `<div class="seg c4" role="radiogroup" aria-label="Slot">${PICK_SLOTS.map(s=>`<button type="button" data-slot="${s}" aria-pressed="${p.slot===s}">${SLOT[s]}</button>`).join('')}</div>`}
       ${p.photo ? `<div class="photo-preview"><img src="${esc(p.photo.url)}" alt="Your selfie"><div style="display:flex;flex-direction:column;justify-content:center;gap:6px"><div style="font-size:18px;font-weight:600;line-height:1.2">${suggVisible.length?"Here's what I can see":'Photo attached'}</div><div class="hint">${suggVisible.length?"Untick anything wrong. Tick the maybes you're wearing.":'Pick what you\'re wearing. Automatic recognition isn\'t set up yet.'}</div></div></div>` : ''}
@@ -1069,16 +1075,17 @@ function drawPicker(){
     </div>
     <div class="sheet-body" id="pk-body">
       ${p.loading ? '<div class="loading">Loading</div>' : ''}
+      ${selected.length ? `<div id="pk-selected"><div class="lbl grouphead accent">Selected · ${selected.length}</div><div class="rows">${rowsHTML(selected)}</div></div>` : ''}
       ${suggVisible.length ? `<div class="lbl grouphead">Clearly visible</div><div class="rows">${rowsHTML(suggVisible)}</div>` : ''}
       ${suggPossible.length ? `<div class="lbl grouphead">Possible · partly hidden</div><div class="rows">${suggPossible.map(s=>itemRowHTML(s.it,{check:p.picked.has(s.it.id), end:{text:s.why}})).join('')}</div>` : ''}
       ${recent.length ? `<div class="lbl grouphead">Worn lately</div><div class="rows">${rowsHTML(recent.filter(i=>!shownIds.has(i.id)))}</div>` : ''}
       ${rest.map(g=>`<div class="lbl grouphead">${esc(g.label)} · ${g.items.length}</div><div class="rows">${rowsHTML(g.items.filter(i=>!shownIds.has(i.id)))}</div>`).join('')}
-      ${!list.length && !p.loading ? `<div class="empty">Nothing matches${p.query.trim()?` “${esc(p.query.trim())}”`:''}.</div><button type="button" class="btn outline" id="pk-additem"${offAttr()}>+ Add item</button>${likelyDown() ? '<div class="needsnet" style="padding-top:6px">Adding an item needs a connection</div>' : ''}` : ''}
+      ${!list.length && !p.loading ? `<div class="empty">${p.query.trim() ? `Nothing else matches “${esc(p.query.trim())}”.` : 'Nothing left to choose.'}</div><button type="button" class="btn outline" id="pk-additem"${offAttr()}>+ Add item</button>${likelyDown() ? '<div class="needsnet" style="padding-top:6px">Adding an item needs a connection</div>' : ''}` : ''}
       ${hiddenCount ? `<button class="btn dashed" id="pk-showall" style="margin-top:16px">Show ${hiddenCount} hidden by the dress code / storage</button>` : ''}
     </div>
     <div class="sheet-foot">
-      <div class="tally"><b>${p.picked.size}</b> <span class="muted">selected${p.photo?' + photo':''}</span>${warn?`<div class="small" style="color:var(--warn)">${esc(warn)}</div>`:''}</div>
-      <button class="btn primary" id="pk-save" ${p.picked.size?'':'disabled'}>${esc(p.saveLabel)}</button>
+      <div class="tally"><b>${p.picked.size}</b> <span class="muted">selected${p.photo?' + photo':''}</span>${warn?`<div class="small" style="color:var(--warn)">${esc(warn)}</div>`:''}${clash?`<div class="small" style="color:var(--warn)">Already a ${esc(SLOT[p.slot]||p.slot)} log on ${esc(fmtShort(p.date))}</div>`:''}${p.edit && !p.picked.size ? '<div class="small" style="color:var(--warn)">Nothing selected · will delete this log</div>' : ''}</div>
+      <button class="btn primary" id="pk-save" ${(p.picked.size || p.edit) && !clash ? '' : 'disabled'}>${esc(p.saveLabel)}</button>
     </div>
   </div>`;
   // bind
@@ -1088,35 +1095,35 @@ function drawPicker(){
   const dateInp = $('#pk-date');
   if (dateInp) dateInp.onchange = async () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInp.value) || dateInp.value===p.date) return;
-    p.date = dateInp.value; p.prefilled=false; p.loading=true; drawPicker(); await loadPickerExisting();
+    p.date = dateInp.value; if (p.edit){ drawPicker(); return; }
+    p.prefilled=false; p.loading=true; drawPicker(); await loadPickerExisting();
   };
-  $$('#layer .seg button').forEach(b => b.onclick = async () => { if (p.slot===b.dataset.slot) return; p.slot=b.dataset.slot; p.prefilled=false; p.loading=true; drawPicker(); await loadPickerExisting(); });
+  $$('#layer .seg button').forEach(b => b.onclick = async () => { if (p.slot===b.dataset.slot) return; p.slot=b.dataset.slot; if (p.edit){ drawPicker(); return; } p.prefilled=false; p.loading=true; drawPicker(); await loadPickerExisting(); });
   bindPickerBody();
   $('#pk-save').onclick = savePicker;
 }
-function drawPickerBody(){ // re-render only the list, keep the search box focused
-  const scroll = $('#pk-body')?.scrollTop || 0;
+function drawPickerBody(){ // re-render the list, keep the search box focused and the view where it was
+  const scroll = $('#pk-body')?.scrollTop || 0, selH = $('#pk-selected')?.offsetHeight || 0;
   const q = $('#pk-q'); const pos = q ? q.selectionStart : null; const focused = document.activeElement===q;
   drawPicker();
   if (focused){ const q2=$('#pk-q'); q2.focus(); try{ q2.setSelectionRange(pos,pos);}catch{} }
-  $('#pk-body').scrollTop = scroll;
+  const selH2 = $('#pk-selected')?.offsetHeight || 0;
+  $('#pk-body').scrollTop = Math.max(0, scroll + (selH2 - selH));
 }
 function bindPickerBody(){
   $$('#pk-body .row[role="checkbox"]').forEach(b => b.onclick = () => {
     const id=Number(b.dataset.id); picker.picked.has(id) ? picker.picked.delete(id) : picker.picked.add(id);
-    $$(`#pk-body .row[data-id="${id}"]`).forEach(r=>r.setAttribute('aria-checked', picker.picked.has(id)));
-    const t=$('#layer .tally b'); if (t) t.textContent = picker.picked.size;
-    const s=$('#pk-save'); if (s) s.disabled = !picker.picked.size;
-    if (picker.mode==='plan'){ drawPickerBody(); }
+    drawPickerBody();
   });
   $('#pk-showall')?.addEventListener('click', ()=>{ picker.showAll=true; drawPickerBody(); });
   $('#pk-additem')?.addEventListener('click', ()=>{ if (likelyDown()) return needNet(); openAdder({fromPicker:true, hintName:picker.query.trim()}); });
 }
 async function savePicker(){
-  const p = picker; if (!p || !p.picked.size) return;
+  const p = picker; if (!p || (!p.picked.size && !p.edit)) return;
   const btn = $('#pk-save'); btn.disabled = true; btn.textContent = 'Saving…';
   const ids = [...p.picked];
   if (p.onDone){ const done = p.onDone; closePicker(); done(ids); return; }
+  if (p.edit) return saveEdit();
   try {
     if (p.mode==='plan'){
       if (likelyDown()){ needNet(); btn.disabled=false; btn.textContent=p.saveLabel; return; }
@@ -1132,6 +1139,77 @@ async function savePicker(){
   } catch(e){ fail('save', e); btn.disabled=false; btn.textContent=p.saveLabel; }
 }
 
+/* Edit a logged outfit: writes only the difference (insert added, delete removed) on the
+   same outfit_id; photo_ref is untouched. Date/slot can move; a clash with an existing log
+   is refused. Offline: item changes are parked in the queue (replayed as a full-list save
+   for that date+slot, which keeps the photo); moves and deletes need a connection. */
+async function editOutfit({o, date, slot, itemIds}){
+  const moved = date !== o.worn_on || slot !== o.slot;
+  const clash = outfitFor(date, slot);
+  if (moved && clash && String(clash.id) !== String(o.id)) throw new Error(`There is already a ${SLOT[slot]||slot} log on ${fmtShort(date)}`);
+  if (o.queued && typeof o.id === 'string'){                       // not on the server yet: just replace the parked entry
+    if (moved) throw new Error('This log is still waiting to sync; move it after it has synced');
+    queuePut({ worn_on:date, slot, trip_id:o.trip_id||null, item_ids:itemIds.slice(), queued_at:Date.now() });
+    setOutfits(state.serverOutfits||[]); updateNetBar(); return { queued:true };
+  }
+  if (likelyDown()){
+    if (moved) throw new Error('Moving a log to another day or slot needs a connection');
+    queuePut({ worn_on:date, slot, trip_id:o.trip_id||null, item_ids:itemIds.slice(), queued_at:Date.now() });
+    setOutfits(state.serverOutfits||[]); updateNetBar(); setTimeout(flushQueue, 1500); return { queued:true };
+  }
+  const before = new Set(o.items), after = new Set(itemIds);
+  const add = itemIds.filter(id => !before.has(id)), remove = o.items.filter(id => !after.has(id));
+  try {
+    if (moved){
+      const { error } = await withTimeout(sb.from('outfits').update({ worn_on:date, slot }).eq('id', o.id), 10000, 'Moving the log');
+      if (error) throw error.code === '23505' ? new Error(`There is already a ${SLOT[slot]||slot} log on ${fmtShort(date)}`) : error;
+    }
+    if (remove.length){ const { error } = await withTimeout(sb.from('outfit_items').delete().eq('outfit_id', o.id).in('item_id', remove), 10000, 'Saving'); if (error) throw error; }
+    if (add.length){ const { error } = await withTimeout(sb.from('outfit_items').insert(add.map(item_id => ({ outfit_id:o.id, item_id }))), 10000, 'Saving'); if (error) throw error; }
+  } catch (e) { if (isNetError(e)) netFailed(); throw e; }
+  netOk();
+  setOutfits((state.serverOutfits||[]).map(r => r.id === o.id ? {...r, worn_on:date, slot, outfit_items:itemIds.map(item_id => ({item_id}))} : r));
+  saveSnapshot(); state.syncedAt = Date.now();
+  return { queued:false, add:add.length, remove:remove.length, moved };
+}
+async function deleteOutfit(o){
+  if (o.queued && typeof o.id === 'string'){ queueDrop(e => e.worn_on===o.worn_on && e.slot===o.slot); setOutfits(state.serverOutfits||[]); updateNetBar(); return; }
+  if (likelyDown()) throw new Error('Deleting a log needs a connection');
+  const d1 = await withTimeout(sb.from('outfit_items').delete().eq('outfit_id', o.id), 10000, 'Deleting'); if (d1.error) throw d1.error;
+  const d2 = await withTimeout(sb.from('outfits').delete().eq('id', o.id), 10000, 'Deleting'); if (d2.error) throw d2.error;
+  queueDrop(e => e.worn_on===o.worn_on && e.slot===o.slot);
+  setOutfits((state.serverOutfits||[]).filter(r => r.id !== o.id)); saveSnapshot();
+}
+async function saveEdit(){
+  const p = picker, o = p.edit, btn = $('#pk-save');
+  const ids = [...p.picked];
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    if (!ids.length){
+      if (!confirm('Delete this whole log?')){ btn.disabled = false; btn.textContent = p.saveLabel; return; }
+      await deleteOutfit(o); toast('Log deleted'); const date = o.worn_on; closePicker();
+      go(date === todayISO() ? '#/today' : `#/day/${date}`); if (location.hash.replace(/^#\/?/,'') === (date === todayISO() ? 'today' : `day/${date}`)) render();
+      return;
+    }
+    const r = await editOutfit({ o, date:p.date, slot:p.slot, itemIds:ids });
+    if (r.queued) toast('Saved on this phone · will sync', 4000);
+    else toast(r.moved ? `Moved to ${fmtShort(p.date)} · ${SLOT[p.slot]}` : `Updated · ${r.add ? '+' + r.add : ''}${r.add && r.remove ? ' ' : ''}${r.remove ? '−' + r.remove : ''}${!r.add && !r.remove ? 'no change' : ''}`);
+    const date = p.date; closePicker();
+    if (route().seg[0] === 'trip' || route().seg[0] === 'item') render();
+    else { go(date === todayISO() ? '#/today' : `#/day/${date}`); if (location.hash.replace(/^#\/?/,'') === (date === todayISO() ? 'today' : `day/${date}`)) render(); }
+  } catch (e) { fail('save the change', e); btn.disabled = false; btn.textContent = p.saveLabel; }
+}
+/* Open the picker on an existing log. Always re-reads the server copy first, so the diff is against what is really stored. */
+async function editLog(o){
+  if (!o) return;
+  openPicker({ edit:o, date:o.worn_on, slot:o.slot, prefill:o.items.slice(), saveLabel:'Save changes', photo:null });
+  if (typeof o.id === 'string' || likelyDown()) return;
+  try {
+    const ex = await withTimeout(fetchOutfit(o.worn_on, o.slot), NET_TIMEOUT, 'Loading');
+    if (!picker || picker.edit !== o) return;
+    if (ex && ex.id === o.id){ o.items = ex.items.slice(); picker.picked = new Set(ex.items); drawPicker(); }
+  } catch (e) { if (isNetError(e)) netFailed(); }
+}
 /* ------------------------------------------------------------
    TRIP
    ------------------------------------------------------------ */
@@ -1190,7 +1268,7 @@ function bindTrip(){
   $$('[data-plan]').forEach(b => b.onclick = () => { if (likelyDown()) return needNet(); const o=occ(b.dataset.plan); openPicker({mode:'plan', date:o.occasion_date, slot:o.slot, occasion:o, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save plan'}); });
   $$('[data-swap]').forEach(b => b.onclick = () => { const o=occ(b.dataset.swap); openPicker({date:o.occasion_date, slot:o.slot, trip:tr, prefill:(o.occasion_items||[]).map(r=>r.item_id), saveLabel:'Save as worn'}); });
   $$('[data-wore-adhoc]').forEach(b => b.onclick = () => { const o=occ(b.dataset.woreAdhoc); openPicker({date:o.occasion_date, slot:o.slot, trip:tr}); });
-  $$('[data-edit-worn]').forEach(b => b.onclick = () => { const o=occ(b.dataset.editWorn); openPicker({date:o.occasion_date, slot:o.slot, trip:tr}); });
+  $$('[data-edit-worn]').forEach(b => b.onclick = () => { const o=occ(b.dataset.editWorn); editLog(outfitFor(o.occasion_date, o.slot)); });
   $$('[data-open-day]').forEach(b => b.onclick = () => go(b.dataset.openDay===todayISO()?'#/today':`#/day/${b.dataset.openDay}`));
   $('#trip-log-other')?.addEventListener('click', ()=>openPicker({date:state.tripDay, slot:'primary', trip:tr}));
   $$('#packlist .row').forEach(b => b.onclick = () => {
@@ -1317,6 +1395,7 @@ function drawItem(it){
   const photos = itemUI.photos;
   const cover = stripBucket(it.photo_ref);
   const looks = state.outfits.filter(o => o.photo_ref && o.items.includes(it.id));
+  const history = state.outfits.filter(o => o.items.includes(it.id)).slice(0, 5);
   const gaps = [
     ['size','Size', !it.size],
     ['unit_price','Price', it.unit_price==null],
@@ -1366,6 +1445,7 @@ function drawItem(it){
       <h1 style="font-size:24px">${esc(it.name)}</h1>
       <div class="small muted">${w.n ? `Worn ${w.n===1?'once':w.n===2?'twice':w.n+' times'} · last ${esc(relDay(w.last))}` : 'Never worn'}</div>
     </div>
+    ${history.length ? `<div class="stack tight" style="gap:4px"><div class="lbl">Worn · ${w.n}</div><div class="rows">${history.map(o=>`<div class="row" style="min-height:44px;padding:4px 0"><a class="rowmain" href="${o.worn_on===todayISO()?'#/today':`#/day/${o.worn_on}`}" style="color:inherit"><span class="name">${esc(fmtShort(o.worn_on))} ${esc(String(parseISO(o.worn_on).getFullYear()))}</span><span class="brand">${esc(SLOT[o.slot]||o.slot)} · ${o.items.length} item${o.items.length===1?'':'s'}${o.photo_ref?' · photo':''}${o.queued?' · waiting to sync':''}</span></a><button type="button" class="linkbtn" data-edit-log="${esc(String(o.id))}" style="padding:0 0 0 12px">Edit</button></div>`).join('')}</div>${w.n > history.length ? `<div class="needsnet">Showing the last ${history.length}</div>` : ''}</div>` : ''}
     ${looks.length ? `<div class="stack tight" style="gap:8px"><div class="between"><span class="lbl">Looks · ${looks.length}</span><span class="mono" style="text-transform:none;letter-spacing:0">outfit photos it's in</span></div>
       <div class="looks">${looks.map(o=>`<a class="look" href="${o.worn_on===todayISO()?'#/today':`#/day/${o.worn_on}`}"><img src="${esc(publicUrl(o.photo_ref))}" alt="" crossorigin="anonymous" onerror="this.remove()"><span>${esc(fmtLabel(o.worn_on))}</span></a>`).join('')}</div></div>` : ''}
     <div class="rows">
@@ -1435,6 +1515,7 @@ function bindItem(it){
       toast(hex ? `Cover set · colour ${hex}` : 'Cover set (colour unchanged)'); drawItem(it);
     } catch(e){ fail('set the cover', e); btn.disabled=false; btn.textContent='Set as cover'; }
   });
+  $$('[data-edit-log]').forEach(b => b.onclick = () => editLog(state.outfits.find(o => String(o.id)===b.dataset.editLog)));
   $$('[data-edit]').forEach(b => b.onclick = () => { if (likelyDown()) return needNet(); itemUI.editing = b.dataset.edit; drawItem(it); const ed=$('#ed'); if (ed && ed.focus && ed.tagName!=='DIV') ed.focus(); });
   const er = $('.editrow');
   if (er){
@@ -1905,7 +1986,8 @@ function drawSelfie(){
         <input type="date" class="input" id="sf-date" value="${esc(s.date)}">${s.dateFromPhoto ? '' : '<div class="needsnet" style="color:var(--warn)">No date on photo — check</div>'}</div>
       <div class="frow" style="padding-top:0"><span class="flabel">Slot</span><div class="seg c4" id="sf-slot">${PICK_SLOTS.map(x => `<button type="button" data-v="${x}" aria-pressed="${s.slot===x}">${SLOT[x]}</button>`).join('')}</div>${secondNote}</div>`;
     const errBanner = s.error ? `<div class="banner"><div class="bt">Couldn't read the outfit</div><div class="small">${esc(s.error)}</div><div class="btn-row"><button type="button" class="btn small" id="sf-retry">Try again</button><button type="button" class="btn small" id="sf-byhand">Pick by hand</button></div></div>` : '';
-    const rows = s.garments.map((g, gi) => {
+    const order = s.garments.map((g, gi) => gi).sort((a, b) => { const A = s.garments[a], B = s.garments[b]; return (A.ticked && A.pick ? 0 : 1) - (B.ticked && B.pick ? 0 : 1) || a - b; });
+    const rows = order.map(gi => { const g = s.garments[gi];
       const top = g.candidates.find(c => c.item_id === g.pick) || g.candidates[0];
       const it = top && state.itemById.get(top.item_id);
       if (!it){
