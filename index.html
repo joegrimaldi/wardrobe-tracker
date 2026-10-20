@@ -1102,13 +1102,12 @@ function drawPicker(){
   bindPickerBody();
   $('#pk-save').onclick = savePicker;
 }
-function drawPickerBody(){ // re-render the list, keep the search box focused and the view where it was
-  const scroll = $('#pk-body')?.scrollTop || 0, selH = $('#pk-selected')?.offsetHeight || 0;
+function drawPickerBody(){ // re-render the list, keep the search box focused and the scroll offset
+  const scroll = $('#pk-body')?.scrollTop || 0;
   const q = $('#pk-q'); const pos = q ? q.selectionStart : null; const focused = document.activeElement===q;
   drawPicker();
   if (focused){ const q2=$('#pk-q'); q2.focus(); try{ q2.setSelectionRange(pos,pos);}catch{} }
-  const selH2 = $('#pk-selected')?.offsetHeight || 0;
-  $('#pk-body').scrollTop = Math.max(0, scroll + (selH2 - selH));
+  $('#pk-body').scrollTop = scroll;   // a ticked row visibly moves up into Selected; the list below shifts, which is the point
 }
 function bindPickerBody(){
   $$('#pk-body .row[role="checkbox"]').forEach(b => b.onclick = () => {
