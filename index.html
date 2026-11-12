@@ -435,7 +435,7 @@ function fail(where, e){
 }
 
 /* ---- poor-signal plumbing ---- */
-const BUILD = '2026-10-20.1';
+const BUILD = '2026-11-12.1';
 const NET_TIMEOUT = 4000;      // how long a read may take before the phone's own copy is shown
 class TimeoutError extends Error { constructor(what){ super(`${what} timed out`); this.name = 'TimeoutError'; } }
 function withTimeout(p, ms=NET_TIMEOUT, what='The request'){
@@ -592,13 +592,24 @@ const TRIP_SEL = 'id,name,start_date,end_date,destination,notes,trip_occasions(i
 function slotOrder(s){ return ['travel','primary','gym','evening','bed'].indexOf(s); }
 const sortTrips = rows => rows.map(t => ({...t, trip_occasions:(t.trip_occasions||[]).slice().sort((a,b)=>a.occasion_date.localeCompare(b.occasion_date) || slotOrder(a.slot)-slotOrder(b.slot))}));
 
+/* Clock skew: right after a token refresh the database can reject the brand-new token with
+   "JWT issued at future" for about a second (Supabase Auth's clock runs slightly ahead of the
+   database's). For that one error only, wait 1 s and run the read once more. A second failure,
+   or any other error, surfaces exactly as before. Reads only; writes are never retried. */
+const JWT_SKEW = /JWT issued at future/i, JWT_SKEW_WAIT = 1000;
+async function readRetry(run){
+  const r = await run();
+  if (!(r && r.error && JWT_SKEW.test(String(r.error.message || '')))) return r;
+  await new Promise(res => setTimeout(res, JWT_SKEW_WAIT));
+  return run();
+}
 async function fetchAll(){
   const [cats, items, outfits, trips, teams] = await Promise.all([
-    sb.from('categories').select('id,name,parent_id,default_layer,sort_order').order('sort_order'),
-    sb.from('items').select(ITEM_COLS).not('status','in','(donated,sold,lost)').order('name'),
-    sb.from('outfits').select(OUTFIT_SEL).order('worn_on',{ascending:false}).limit(1000),
-    sb.from('trips').select(TRIP_SEL).order('start_date'),
-    sb.from('teams').select('id,name,kind,sort_order').order('sort_order').order('name'),
+    readRetry(() => sb.from('categories').select('id,name,parent_id,default_layer,sort_order').order('sort_order')),
+    readRetry(() => sb.from('items').select(ITEM_COLS).not('status','in','(donated,sold,lost)').order('name')),
+    readRetry(() => sb.from('outfits').select(OUTFIT_SEL).order('worn_on',{ascending:false}).limit(1000)),
+    readRetry(() => sb.from('trips').select(TRIP_SEL).order('start_date')),
+    readRetry(() => sb.from('teams').select('id,name,kind,sort_order').order('sort_order').order('name')),
   ]);
   for (const [r, what] of [[cats,'categories'],[items,'items'],[outfits,'outfits'],[trips,'trips'],[teams,'teams']]) if (r.error) throw Object.assign(r.error, { message:`${what}: ${r.error.message}` });
   return { cats:cats.data, teams:teams.data, items:items.data, outfits:outfits.data, trips:sortTrips(trips.data) };
@@ -650,17 +661,17 @@ function patchServerOutfit({id, date, slot, itemIds, tripId, photoPath}){
   setOutfits(rows);
 }
 async function reloadOutfits(){
-  const { data, error } = await sb.from('outfits').select(OUTFIT_SEL).order('worn_on',{ascending:false}).limit(1000);
+  const { data, error } = await readRetry(() => sb.from('outfits').select(OUTFIT_SEL).order('worn_on',{ascending:false}).limit(1000));
   if (error) throw error; setOutfits(data); saveSnapshot();
 }
 async function reloadTrips(){
-  const { data, error } = await sb.from('trips').select(TRIP_SEL).order('start_date');
+  const { data, error } = await readRetry(() => sb.from('trips').select(TRIP_SEL).order('start_date'));
   if (error) throw error;
   state.trips = sortTrips(data); saveSnapshot();
 }
 /* The live outfit for a date/slot, straight from the server. */
 async function fetchOutfit(date, slot){
-  const { data, error } = await sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,outfit_items(item_id)').eq('worn_on',date).eq('slot',slot).maybeSingle();
+  const { data, error } = await readRetry(() => sb.from('outfits').select('id,worn_on,slot,trip_id,photo_ref,outfit_items(item_id)').eq('worn_on',date).eq('slot',slot).maybeSingle());
   if (error) throw error;
   return data ? {...data, items:(data.outfit_items||[]).map(r=>r.item_id)} : null;
 }
