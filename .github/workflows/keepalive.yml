@@ -98,7 +98,7 @@ jobs:
             "$SUPABASE_URL/storage/v1/object/public/item-photos/keepalive-probe-not-a-file"
           check "Auth settings" "200" '"disable_signup"' \
             "$SUPABASE_URL/auth/v1/settings"
-          if ! grep -Eq '"disable_signup"[[:space:]]*:[[:space:]]*true' "$BODY"; then
+          if [ "$good" = 1 ] && ! grep -Eq '"disable_signup"[[:space:]]*:[[:space:]]*true' "$BODY"; then
             echo "::warning::Supabase Auth sign-up is not disabled. This app assumes one account; check Authentication settings."
           fi
 
