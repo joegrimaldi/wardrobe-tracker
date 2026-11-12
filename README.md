@@ -6,6 +6,8 @@ Phone-first outfit log. One static page (`index.html`) on GitHub Pages, data in 
 - **Supabase project:** `sobshyactzxhtsayemkj`. The browser uses the publishable key only; RLS grants `authenticated` everything and `anon` nothing.
 - **Tabs:** Today (log / wear again / edit) · Trip (Days · Pack) · Closet (needs-attention filters → Item page with photos, looks, inline edits).
 
+The backend (three Edge Functions and the database schema, code only) is mirrored in [`supabase/`](supabase/README.md).
+
 ## Rules the code follows
 - Logging must take under 15 seconds. No ratings, no required fields.
 - The day rolls over at 03:33 phone-local time (`DAY_ROLLOVER` in `index.html`), not midnight. Everything the app calls "today" comes from `todayISO()`; the picker's date control still allows any date.
