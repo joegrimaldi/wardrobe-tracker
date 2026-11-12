@@ -1,14 +1,46 @@
-# Keeps the Supabase free-tier project from pausing (it pauses after 7 idle days).
-# One lightweight REST request a day, made with the publishable key.
-# The key is the same one that ships in index.html, so the secret is a nicety,
-# not a security boundary: if SUPABASE_PUBLISHABLE_KEY is not set, the key is
-# read out of index.html so the ping still runs.
+# Keeps the Supabase free-tier project from being paused for inactivity (7 idle days).
+#
+# Why this looks the way it does (findings of 12 Nov 2026, after Supabase warned on 11 Nov
+# that the project would pause even though this job had run every day):
+#   * The old job made ONE request a day: GET /rest/v1/categories?limit=1 with the publishable
+#     key. It never missed a day and always got 200, but the database's own statistics showed
+#     that query read zero blocks in 46 calls. For an anonymous caller, row-level security
+#     answers "no rows" before any table is touched.
+#   * GitHub started every scheduled run 4 to 10 hours late.
+#
+# What it does now, twice a day, read-only, with the publishable key as the only credential:
+#   1. REST   wear-stats view      Postgres plans and runs an aggregate over the main tables (as anon: zeros)
+#   2. REST   items, exact count   a second PostgREST statement
+#   3. Storage list of the bucket  Postgres runs storage.search(): about 600 buffer reads, returns []
+#   4. Storage public-route lookup the storage service reads the bucket's row, then reports
+#                                  "Object not found" for a name that does not exist (that 400 is the healthy answer)
+#   5. Auth   settings             touches the Auth service (no database work); also warns if sign-up is ever re-enabled
+# Nothing here can read the app's rows: that would need a signed-in user, by design.
+# Any unexpected answer fails the job, and GitHub emails the failure. A paused project fails loudly.
+#
+# The publishable key is the same one that ships in index.html, so the secret is a nicety,
+# not a security boundary: if SUPABASE_PUBLISHABLE_KEY is not set, the key is read out of
+# index.html so the job still runs.
+#
+# Note: GitHub disables scheduled workflows in a public repository after 60 days without
+# repository activity. Any push resets that clock.
 name: Supabase keep-alive
 
 on:
   schedule:
-    - cron: '17 9 * * *'   # 09:17 UTC daily
+    - cron: '23 4 * * *'    # 04:23 UTC
+    - cron: '23 16 * * *'   # 16:23 UTC
   workflow_dispatch:
+  push:                     # self-test whenever this file changes
+    branches: [main]
+    paths: ['.github/workflows/keepalive.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
 
 jobs:
   ping:
@@ -16,20 +48,63 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Ping the REST API
+      - name: Read from the project (REST, Storage, Auth)
         env:
           SUPABASE_URL: https://sobshyactzxhtsayemkj.supabase.co
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           KEY="${SUPABASE_PUBLISHABLE_KEY:-}"
           if [ -z "$KEY" ]; then
             KEY=$(grep -oE "sb_publishable_[A-Za-z0-9_-]+" index.html | head -n1)
             echo "Secret not set; using the publishable key from index.html"
           fi
-          code=$(curl -sS -o /tmp/body -w '%{http_code}' \
-            -A 'wardrobe-keepalive (github-actions)' \
-            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
-            "$SUPABASE_URL/rest/v1/categories?select=id&limit=1")
-          echo "HTTP $code: $(cat /tmp/body)"
-          case "$code" in 2*) exit 0;; *) echo "Keep-alive failed"; exit 1;; esac
+          if [ -z "$KEY" ]; then echo "No publishable key found"; exit 1; fi
+          UA='wardrobe-keepalive (github-actions)'
+          SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
+          BODY="$(mktemp)"
+          fails=0
+          { echo "| Check | Result | HTTP |"; echo "| --- | --- | --- |"; } >> "$SUMMARY"
+
+          # check <label> <accepted HTTP codes, |-separated> <regex the body must match> <curl arguments...>
+          check() {
+            label="$1"; want="$2"; must="$3"; shift 3
+            code=$(curl -sS -o "$BODY" -w '%{http_code}' --max-time 30 \
+              --retry 3 --retry-delay 5 --retry-connrefused \
+              -A "$UA" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" "$@") || code="no-response"
+            shown=$(head -c 140 "$BODY" 2>/dev/null | tr -d '\n')
+            case "|$want|" in
+              *"|$code|"*) if grep -Eqi -- "$must" "$BODY"; then good=1; else good=0; fi ;;
+              *) good=0 ;;
+            esac
+            if [ "$good" = 1 ]; then
+              echo "ok    $label: HTTP $code  $shown"
+              echo "| $label | ok | $code |" >> "$SUMMARY"
+            else
+              echo "FAIL  $label: HTTP $code (wanted $want, body matching /$must/)  $shown"
+              echo "| $label | **FAIL** | $code |" >> "$SUMMARY"
+              fails=$((fails + 1))
+            fi
+          }
+
+          check "REST wear-stats view" "200" '^\[\{' \
+            "$SUPABASE_URL/rest/v1/v_closet_utilisation?select=*"
+          check "REST items, exact count" "200|206" '^\[' \
+            -H "Prefer: count=exact" "$SUPABASE_URL/rest/v1/items?select=id&limit=1"
+          check "Storage list" "200" '^\[' \
+            -X POST -H "Content-Type: application/json" -d '{"prefix":"","limit":1}' \
+            "$SUPABASE_URL/storage/v1/object/list/item-photos"
+          check "Storage public-route lookup" "400|404" 'not.?found' \
+            "$SUPABASE_URL/storage/v1/object/public/item-photos/keepalive-probe-not-a-file"
+          check "Auth settings" "200" '"disable_signup"' \
+            "$SUPABASE_URL/auth/v1/settings"
+          if ! grep -Eq '"disable_signup"[[:space:]]*:[[:space:]]*true' "$BODY"; then
+            echo "::warning::Supabase Auth sign-up is not disabled. This app assumes one account; check Authentication settings."
+          fi
+
+          rm -f "$BODY"
+          if [ "$fails" -gt 0 ]; then
+            echo "Keep-alive failed: $fails of 5 checks did not get the expected answer"
+            exit 1
+          fi
+          echo "Keep-alive ok: 5 of 5 checks"

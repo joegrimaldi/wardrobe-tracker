@@ -54,8 +54,10 @@ Commit to `main`; Pages redeploys in about a minute. To roll back, revert to the
 (`git revert <sha>` or `git checkout <sha> -- index.html && git commit`).
 
 ## Keep-alive
-`.github/workflows/keepalive.yml` pings the REST API daily so the free-tier project does not pause after 7 idle days.
+`.github/workflows/keepalive.yml` keeps the free-tier project from pausing after 7 idle days. It runs twice a day (04:23 and 16:23 UTC; GitHub starts scheduled runs hours late), on any change to the workflow file, and on demand.
+Each run makes five read-only requests with the publishable key: two REST reads, a Storage bucket list, a Storage public-route lookup, and Auth settings. Any unexpected answer fails the job. With that key, row-level security lets nothing read the app's rows, so the Storage requests are the ones that make Postgres do real work; the header of the workflow file has the measurements.
 It uses the `SUPABASE_PUBLISHABLE_KEY` repo secret if set, otherwise the publishable key already in `index.html`.
+GitHub disables scheduled workflows in a public repo after 60 days without repository activity; any push resets that.
 
 ## Local testing
 Serve the folder (`python3 -m http.server`) and sign in; reads are free, for writes use a throwaway date and delete only what you created.
