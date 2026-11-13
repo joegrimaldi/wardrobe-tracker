@@ -534,7 +534,46 @@ function outfitsOn(date){ return state.outfits.filter(o => o.worn_on===date); }
 
 /* ---- storage paths ---- */
 const stripBucket = p => p ? String(p).replace(/^item-photos\//,'') : p;
-const publicUrl = p => p ? sb.storage.from(BUCKET).getPublicUrl(stripBucket(p)).data.publicUrl : null;
+/* Photos are served through short-lived signed URLs (the bucket is private).
+   photoUrl() is synchronous for rendering: it returns a cached signed URL, or a blank
+   placeholder while a batched request signs the path; the <img>/<a> carrying
+   data-p="<path>" is then updated in place. Signed URLs are kept in localStorage so the
+   app can still show photos offline; the service worker caches photos by path, ignoring
+   the token, so a stale URL still hits the cache. */
+const SIGN_TTL = 6*3600;                 // seconds a signed URL lives
+const SIGN_RENEW = 30*60*1000;           // renew when less than this is left (ms)
+const SIGN_KEY = 'wardrobe:signed:v1';
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const SIGNED = (() => { try { return new Map(Object.entries(JSON.parse(localStorage.getItem(SIGN_KEY)||'{}'))); } catch(_) { return new Map(); } })();
+const signWanted = new Set(); let signTimer = null;
+function saveSigned(){ const now=Date.now(); for (const [k,v] of SIGNED) if (!v || v.e < now - 7*864e5) SIGNED.delete(k); try { localStorage.setItem(SIGN_KEY, JSON.stringify(Object.fromEntries(SIGNED))); } catch(_){} }
+function applySigned(k, u){ for (const el of document.querySelectorAll('[data-p]')) if (el.dataset.p===k){ if (el.tagName==='A') el.href=u; else el.src=u; } }
+async function signBatch(){
+  signTimer = null; const paths = [...signWanted]; signWanted.clear(); if (!paths.length) return;
+  for (let i=0; i<paths.length; i+=100){
+    const chunk = paths.slice(i, i+100);
+    try {
+      const { data, error } = await sb.storage.from(BUCKET).createSignedUrls(chunk, SIGN_TTL);
+      if (error) throw error;
+      const e = Date.now() + SIGN_TTL*1000;
+      for (const r of data||[]) if (r && r.signedUrl && !r.error){ const k = r.path || chunk[(data||[]).indexOf(r)]; SIGNED.set(k, {u:r.signedUrl, e}); applySigned(k, r.signedUrl); }
+    } catch(err){ console.warn('photo signing failed', err); }
+  }
+  saveSigned();
+}
+function wantSigned(k){ signWanted.add(k); if (!signTimer) signTimer = setTimeout(signBatch, 30); }
+const photoUrl = p => {
+  if (!p) return null; const k = stripBucket(p); const s = SIGNED.get(k), now = Date.now();
+  if (!s || s.e - now < SIGN_RENEW) wantSigned(k);
+  if (s && (s.e > now || !navigator.onLine)) return s.u;
+  return BLANK;
+};
+async function signedUrlNow(p){
+  const k = stripBucket(p); const s = SIGNED.get(k);
+  if (s && s.e - Date.now() > SIGN_RENEW) return s.u;
+  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(k, SIGN_TTL);
+  if (error) throw error; SIGNED.set(k, {u:data.signedUrl, e:Date.now()+SIGN_TTL*1000}); saveSigned(); return data.signedUrl;
+}
 function photoPrefix(it){ return `${(PREFIX[it.item_class]||'WD').toLowerCase()}-${pad(it.id,3)}-`; }
 function kindOfPhoto(name, it){
   const m = name.match(/-(own|retail|label)(?:-[\w]+)?\.\w+$/i);
@@ -881,8 +920,8 @@ function pickFile(camera=false){
    ------------------------------------------------------------ */
 function swatchHTML(it, cls=''){
   const bg = it.swatch_hex || '#3A3F46';
-  const url = it.photo_ref ? publicUrl(it.photo_ref) : null;
-  return `<span class="sw ${cls}" style="background:${esc(bg)}">${url ? `<img src="${esc(url)}" alt="" loading="lazy" crossorigin="anonymous" onerror="this.remove()">` : ''}</span>`;
+  const url = it.photo_ref ? photoUrl(it.photo_ref) : null;
+  return `<span class="sw ${cls}" style="background:${esc(bg)}">${url ? `<img data-p="${esc(stripBucket(it.photo_ref))}" src="${esc(url)}" alt="" loading="lazy" crossorigin="anonymous" onerror="this.remove()">` : ''}</span>`;
 }
 function itemRowHTML(it, {end='', check=null, href=null, cls=''}={}){
   const inner = `${swatchHTML(it)}<span class="rowmain"><span class="name">${esc(it.name)}</span>${it.brand?`<span class="brand">${esc(it.brand)}</span>`:''}</span>${end?`<span class="rowend ${end.cls||''}">${esc(end.text||end)}</span>`:''}${check!==null?'<span class="check"></span>':''}`;
@@ -951,10 +990,10 @@ function dayHTML(date){
     parts.push(`<div class="between"><h1>Logged · ${logged.length} outfit${logged.length===1?'':'s'}</h1></div></div>`);
     for (const o of logged){
       const its = o.items.map(id=>state.itemById.get(id)).filter(Boolean);
-      const photo = o.photo_ref ? publicUrl(o.photo_ref) : null;
+      const photo = o.photo_ref ? photoUrl(o.photo_ref) : null;
       parts.push(`<section class="stack tight">
         <div class="between"><span class="lbl ${o.slot==='primary'?'':'accent'}">${esc(SLOT[o.slot]||o.slot)} · ${its.length}${o.trip_id?' · TRIP':''}${o.queued?' · WAITING TO SYNC':''}</span><button class="linkbtn" data-edit="${o.id}" data-date="${o.worn_on}" data-slot="${o.slot}">Edit</button></div>
-        ${photo ? `<a href="${esc(photo)}" target="_blank" rel="noopener" style="display:flex;gap:12px;align-items:center;color:inherit"><img src="${esc(photo)}" alt="Outfit photo" crossorigin="anonymous" onerror="this.remove()" style="width:96px;height:128px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><span class="small muted">Outfit photo. It shows in the Looks strip of each item.</span></a>` : ''}
+        ${photo ? `<a data-p="${esc(stripBucket(o.photo_ref))}" href="${esc(photo)}" target="_blank" rel="noopener" style="display:flex;gap:12px;align-items:center;color:inherit"><img data-p="${esc(stripBucket(o.photo_ref))}" src="${esc(photo)}" alt="Outfit photo" crossorigin="anonymous" onerror="this.remove()" style="width:96px;height:128px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><span class="small muted">Outfit photo. It shows in the Looks strip of each item.</span></a>` : ''}
         <div class="rows">${its.map(i=>itemRowHTML(i,{href:`#/item/${i.id}`})).join('')}</div>
       </section>`);
     }
@@ -1435,7 +1474,7 @@ function drawItem(it){
   let carousel;
   if (photos === null) carousel = `<div class="slide plate" style="background:${esc(it.swatch_hex||'#3A3F46')}">loading photos…</div>`;
   else if (!photos.length) carousel = `<div class="slide plate" style="background:${esc(it.swatch_hex||'#3A3F46')}">No photo</div>`;
-  else carousel = photos.map((p,i)=>`<div class="slide" data-i="${i}" style="background:${esc(it.swatch_hex||'#3A3F46')}"><img src="${esc(publicUrl(p))}" alt="${esc(it.name)} photo ${i+1}" crossorigin="anonymous" onerror="this.remove()"><div class="badges">${p===cover?'<span class="badge cover">COVER</span>':''}<span class="badge">${esc(kindOfPhoto(p,it))}</span></div></div>`).join('');
+  else carousel = photos.map((p,i)=>`<div class="slide" data-i="${i}" style="background:${esc(it.swatch_hex||'#3A3F46')}"><img data-p="${esc(stripBucket(p))}" src="${esc(photoUrl(p))}" alt="${esc(it.name)} photo ${i+1}" crossorigin="anonymous" onerror="this.remove()"><div class="badges">${p===cover?'<span class="badge cover">COVER</span>':''}<span class="badge">${esc(kindOfPhoto(p,it))}</span></div></div>`).join('');
   const cur = photos && photos.length ? photos[Math.min(itemUI.slide, photos.length-1)] : null;
 
   $('#view').innerHTML = `<div class="stack" style="gap:14px">
@@ -1457,7 +1496,7 @@ function drawItem(it){
     </div>
     ${history.length ? `<div class="stack tight" style="gap:4px"><div class="lbl">Worn · ${w.n}</div><div class="rows">${history.map(o=>`<div class="row" style="min-height:44px;padding:4px 0"><a class="rowmain" href="${o.worn_on===todayISO()?'#/today':`#/day/${o.worn_on}`}" style="color:inherit"><span class="name">${esc(fmtShort(o.worn_on))} ${esc(String(parseISO(o.worn_on).getFullYear()))}</span><span class="brand">${esc(SLOT[o.slot]||o.slot)} · ${o.items.length} item${o.items.length===1?'':'s'}${o.photo_ref?' · photo':''}${o.queued?' · waiting to sync':''}</span></a><button type="button" class="linkbtn" data-edit-log="${esc(String(o.id))}" style="padding:0 0 0 12px">Edit</button></div>`).join('')}</div>${w.n > history.length ? `<div class="needsnet">Showing the last ${history.length}</div>` : ''}</div>` : ''}
     ${looks.length ? `<div class="stack tight" style="gap:8px"><div class="between"><span class="lbl">Looks · ${looks.length}</span><span class="mono" style="text-transform:none;letter-spacing:0">outfit photos it's in</span></div>
-      <div class="looks">${looks.map(o=>`<a class="look" href="${o.worn_on===todayISO()?'#/today':`#/day/${o.worn_on}`}"><img src="${esc(publicUrl(o.photo_ref))}" alt="" crossorigin="anonymous" onerror="this.remove()"><span>${esc(fmtLabel(o.worn_on))}</span></a>`).join('')}</div></div>` : ''}
+      <div class="looks">${looks.map(o=>`<a class="look" href="${o.worn_on===todayISO()?'#/today':`#/day/${o.worn_on}`}"><img data-p="${esc(stripBucket(o.photo_ref))}" src="${esc(photoUrl(o.photo_ref))}" alt="" crossorigin="anonymous" onerror="this.remove()"><span>${esc(fmtLabel(o.worn_on))}</span></a>`).join('')}</div></div>` : ''}
     <div class="rows">
       ${gapRows}
       <div class="field"><span class="k">Colour</span><span class="v"><span class="sw" style="background:${esc(it.swatch_hex||'#3A3F46')}"></span>${it.swatch_source==='photo'?'from cover photo':'from colour name'}</span></div>
@@ -1518,7 +1557,7 @@ function bindItem(it){
     const btn=$('#it-cover'); btn.disabled=true; btn.textContent='Sampling…';
     try {
       let hex = null;
-      try { hex = await sampleFromUrl(publicUrl(path)); } catch(e){ console.warn('swatch sample failed', e); }
+      try { hex = await sampleFromUrl(await signedUrlNow(path)); } catch(e){ console.warn('swatch sample failed', e); }
       const patch = { photo_ref: path, photo_source: kindOfPhoto(path,it)==='RETAIL' ? 'retailer' : 'own_photo' };
       if (hex) Object.assign(patch, { swatch_hex: hex, swatch_source:'photo' });
       it = await updateItem(it.id, patch);

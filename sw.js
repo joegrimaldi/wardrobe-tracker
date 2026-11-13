@@ -3,7 +3,9 @@
      Never cache-first: that would pin Joe to a stale build after a deploy.
    - Immutable static assets (pinned supabase-js modules on esm.sh, Google Fonts,
      the icon) are cache-first.
-   - Item photos from the public storage bucket are cached as they are viewed.
+   - Item photos are cached as they are viewed. They arrive through short-lived
+     signed URLs (/object/sign/...?token=...); the cache key is the photo's path
+     without the token, so a photo cached once keeps working after its link expires.
    - Supabase REST, auth, functions and storage API calls are NEVER handled or
      cached here. Data caching lives in the app (snapshot + write queue). */
 const VERSION = 'v1';
@@ -12,7 +14,8 @@ const PHOTOS = 'wardrobe-photos-' + VERSION;
 const SCOPE = self.registration.scope;
 const SHELL_URL = new URL('index.html', SCOPE).href;
 const STATIC_HOSTS = ['esm.sh', 'fonts.googleapis.com', 'fonts.gstatic.com'];
-const PHOTO_PATH = '/storage/v1/object/public/item-photos/';
+const PHOTO_PATH = '/storage/v1/object/public/item-photos/';   // cache key form (also matches entries cached before signed URLs)
+const SIGNED_PATH = '/storage/v1/object/sign/item-photos/';
 const PHOTO_MAX = 150;          // entries; roughly 20-50 MB of 1600 px JPEG/WebP
 const NET_TIMEOUT = 3000;
 
@@ -78,7 +81,7 @@ self.addEventListener('fetch', e => {
     return e.respondWith(sameOrigin(e));
   }
   if (STATIC_HOSTS.includes(url.hostname)) return e.respondWith(cacheFirst(req));
-  if (url.hostname.endsWith('.supabase.co') && url.pathname.includes(PHOTO_PATH)) return e.respondWith(photo(e));
+  if (url.hostname.endsWith('.supabase.co') && (url.pathname.includes(PHOTO_PATH) || url.pathname.includes(SIGNED_PATH))) return e.respondWith(photo(e));
   // Anything else (Supabase REST / auth / functions / storage API) goes straight to the network.
 });
 
@@ -125,15 +128,16 @@ async function trim(cache) {
 
 async function photo(e) {
   const req = e.request, url = new URL(req.url);
-  if (url.search) return fetch(req);                 // cache-busted requests (swatch sampling) are never stored
+  if (url.searchParams.has('v')) return fetch(req);  // cache-busted requests (swatch sampling) are never stored
+  const key = url.origin + url.pathname.replace(SIGNED_PATH, PHOTO_PATH);   // token stripped
   const cache = await caches.open(PHOTOS);
-  const hit = await cache.match(req.url, { ignoreVary: true });
+  const hit = await cache.match(key, { ignoreVary: true });
   const fromNet = () => fetch(req).then(res => {
-    if (res.ok && res.type !== 'opaque') keep(e, cache.put(req.url, res.clone()).then(() => trim(cache)).catch(() => {}));
+    if (res.ok && res.type !== 'opaque') keep(e, cache.put(key, res.clone()).then(() => trim(cache)).catch(() => {}));
     return res;
   });
-  if (url.pathname.includes(PHOTO_PATH + 'outfits/')) {   // selfies can be replaced in place: prefer the network
-    try { return await timeout(fromNet(), NET_TIMEOUT); } catch (err) { if (hit) return hit; throw err; }
+  if (key.includes(PHOTO_PATH + 'outfits/')) {   // selfies can be replaced in place: prefer the network
+    try { const r = await timeout(fromNet(), NET_TIMEOUT); return (!r.ok && hit) ? hit : r; } catch (err) { if (hit) return hit; throw err; }
   }
   return hit || fromNet();
 }
