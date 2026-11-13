@@ -487,7 +487,7 @@ GRANT ALL ON TABLE public.v_pair_affinity TO service_role;
 
 -- ===== Storage =====
 -- Buckets (configuration, created by migration create_item_photos_bucket; not row data):
---   item-photos: public=t, file_size_limit=10485760 bytes, allowed_mime_types={image/png,image/jpeg,image/webp,image/avif}
+--   item-photos: public=f (private since migration 20261113030339; was public=t), file_size_limit=10485760 bytes, allowed_mime_types={image/png,image/jpeg,image/webp,image/avif}
 -- storage.objects has row-level security enabled by the platform. Policies:
 CREATE POLICY item_photos_auth_delete ON storage.objects AS PERMISSIVE FOR DELETE TO authenticated
   USING ((bucket_id = 'item-photos'::text));

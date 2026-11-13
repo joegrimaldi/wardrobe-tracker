@@ -13,7 +13,8 @@
 #   2. REST   items, exact count   a second PostgREST statement
 #   3. Storage list of the bucket  Postgres runs storage.search(): about 600 buffer reads, returns []
 #   4. Storage public-route lookup the storage service reads the bucket's row, then reports
-#                                  "Object not found" for a name that does not exist (that 400 is the healthy answer)
+#                                  "Bucket not found" (the bucket is private since 13 Nov 2026; before that,
+#                                  "Object not found"). Either 400 is the healthy answer
 #   5. Auth   settings             touches the Auth service (no database work); also warns if sign-up is ever re-enabled
 # Nothing here can read the app's rows: that would need a signed-in user, by design.
 # Any unexpected answer fails the job, and GitHub emails the failure. A paused project fails loudly.

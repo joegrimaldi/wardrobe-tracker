@@ -28,7 +28,7 @@ All three answer `POST` only, run as the calling user (the user's token, never t
 and send `Access-Control-Allow-Origin: https://joegrimaldi.github.io`. If the page ever moves to
 another origin, that header must change in all three files.
 
-`schema.sql` reflects the database after migration `20261112204430`. Applied migrations, oldest first:
+`schema.sql` reflects the database after migration `20261113030339`. Applied migrations, oldest first:
 
 | Version | Name |
 | --- | --- |
@@ -42,6 +42,7 @@ another origin, that header must change in all three files.
 | 20261112202708 | item_photos_read_authenticated_only |
 | 20261112204359 | tmp_backup_export_open |
 | 20261112204430 | tmp_backup_export_close |
+| 20261113030339 | item_photos_bucket_private |
 
 The earliest tables were created before migrations were used, so the migrations alone do not rebuild
 the schema. `schema.sql` does. It supersedes the project document `schema.sql` (v1), which is stale.
@@ -77,7 +78,7 @@ the deployed function drifting apart is the failure this folder exists to preven
 - The database credentials and any connection string are never written to this repo.
   The publishable key in `index.html` is public by design.
 - Dashboard settings that no SQL captures: Auth sign-up is **disabled** (12 Nov 2026); the
-  `item-photos` bucket is public by URL, 10 MB limit, images only (see the Storage section of `schema.sql`).
+  `item-photos` bucket is **private** since 13 Nov 2026 (photos load only through signed URLs; see `photoUrl()` in `index.html`), 10 MB limit, images only (see the Storage section of `schema.sql`).
 
 ## What must never be added here
 
