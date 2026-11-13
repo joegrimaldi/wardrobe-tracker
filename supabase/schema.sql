@@ -1,6 +1,9 @@
 -- Wardrobe tracker: database schema (schema only, no row data)
 -- Supabase project sobshyactzxhtsayemkj. Captured 2026-11-12, after migration
--- 20261112204430 (tmp_backup_export_close).
+-- 20261112204430 (tmp_backup_export_close). Hand-updated 2026-11-13 for the
+-- migrations listed in README.md through revoke_rls_auto_enable_execute
+-- (private bucket, owner-scoped policies, revoked EXECUTE); the md5 below refers
+-- to the 2026-11-12 capture.
 --
 -- How this file was made: generated from the live system catalogs
 -- (pg_get_constraintdef, pg_get_viewdef, pg_get_functiondef, pg_policies, ...)
@@ -18,13 +21,14 @@
 -- Reading notes:
 --   * Names inside constraint, view and trigger bodies are unqualified, as Postgres
 --     prints them; they resolve with search_path = public (the default).
---   * Row-level security is on for all 11 tables, and every policy is
---     "authenticated: all operations, true". That is safe only while Joe is the
---     only account (sign-up is disabled in Supabase Auth; a dashboard setting, not SQL).
+--   * Row-level security is on for all 11 tables. Every table policy and every
+--     storage policy is scoped to one account: auth.uid() must equal Joe's user id
+--     (owner_scoped_rls, 13 Nov 2026). Sign-up is also disabled in Supabase Auth
+--     (a dashboard setting, not SQL). A new account would see nothing.
 --   * anon holds table privileges (Supabase's default grants) but no policy, so
 --     anonymous requests see nothing.
---   * rls_auto_enable() is executable by anon/authenticated. Known and intentional;
---     it only runs as an event trigger.
+--   * rls_auto_enable() only runs as an event trigger; EXECUTE is revoked from
+--     PUBLIC, anon and authenticated.
 --   * The bucket itself is configuration, shown as a comment in the Storage section.
 --
 -- This file supersedes the project document "schema.sql" (v1), which predates
@@ -381,7 +385,7 @@ BEGIN
 END;
 $function$
 ;
--- EXECUTE on public.rls_auto_enable() is held by: anon, authenticated, postgres, PUBLIC, service_role
+-- EXECUTE on public.rls_auto_enable() is held by: postgres, service_role (revoked from PUBLIC, anon, authenticated in migration 20261113031447)
 
 -- ===== Triggers =====
 -- none
@@ -404,39 +408,39 @@ ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trip_occasions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY authenticated_full_access ON public.acquisitions AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.care_events AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.categories AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.collectible_attrs AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.items AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.occasion_items AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.outfit_items AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.outfits AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.teams AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.trip_occasions AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
-CREATE POLICY authenticated_full_access ON public.trips AS PERMISSIVE FOR ALL TO authenticated
-  USING (true)
-  WITH CHECK (true);
+CREATE POLICY owner_full_access ON public.acquisitions AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.care_events AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.categories AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.collectible_attrs AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.items AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.occasion_items AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.outfit_items AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.outfits AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.teams AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.trip_occasions AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
+CREATE POLICY owner_full_access ON public.trips AS PERMISSIVE FOR ALL TO authenticated
+  USING ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid))
+  WITH CHECK ((( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid));
 
 -- ===== Table privileges (Supabase API roles) =====
 GRANT ALL ON TABLE public.acquisitions TO anon;
@@ -489,12 +493,12 @@ GRANT ALL ON TABLE public.v_pair_affinity TO service_role;
 -- Buckets (configuration, created by migration create_item_photos_bucket; not row data):
 --   item-photos: public=f (private since migration 20261113030339; was public=t), file_size_limit=10485760 bytes, allowed_mime_types={image/png,image/jpeg,image/webp,image/avif}
 -- storage.objects has row-level security enabled by the platform. Policies:
-CREATE POLICY item_photos_auth_delete ON storage.objects AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((bucket_id = 'item-photos'::text));
-CREATE POLICY item_photos_auth_read ON storage.objects AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((bucket_id = 'item-photos'::text));
-CREATE POLICY item_photos_auth_update ON storage.objects AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((bucket_id = 'item-photos'::text))
-  WITH CHECK ((bucket_id = 'item-photos'::text));
-CREATE POLICY item_photos_auth_write ON storage.objects AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((bucket_id = 'item-photos'::text));
+CREATE POLICY item_photos_owner_delete ON storage.objects AS PERMISSIVE FOR DELETE TO authenticated
+  USING (((bucket_id = 'item-photos'::text) AND (( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid)));
+CREATE POLICY item_photos_owner_read ON storage.objects AS PERMISSIVE FOR SELECT TO authenticated
+  USING (((bucket_id = 'item-photos'::text) AND (( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid)));
+CREATE POLICY item_photos_owner_update ON storage.objects AS PERMISSIVE FOR UPDATE TO authenticated
+  USING (((bucket_id = 'item-photos'::text) AND (( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid)))
+  WITH CHECK (((bucket_id = 'item-photos'::text) AND (( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid)));
+CREATE POLICY item_photos_owner_write ON storage.objects AS PERMISSIVE FOR INSERT TO authenticated
+  WITH CHECK (((bucket_id = 'item-photos'::text) AND (( SELECT auth.uid() AS uid) = '57e1da5a-e8b1-4f63-a5c3-7750cd494026'::uuid)));

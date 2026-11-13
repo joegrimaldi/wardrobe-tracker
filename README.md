@@ -3,7 +3,7 @@
 Phone-first outfit log. One static page (`index.html`) on GitHub Pages, data in Supabase.
 
 - **Live:** https://joegrimaldi.github.io/wardrobe-tracker/ (Pages serves `main`, repo root)
-- **Supabase project:** `sobshyactzxhtsayemkj`. The browser uses the publishable key only; RLS grants `authenticated` everything and `anon` nothing.
+- **Supabase project:** `sobshyactzxhtsayemkj`. The browser uses the publishable key only; RLS grants everything to one account (Joe's user id, `owner_scoped_rls`) and nothing to anyone else, signed in or not. A second account would need a new migration.
 - **Tabs:** Today (log / wear again / edit) · Trip (Days · Pack) · Closet (needs-attention filters → Item page with photos, looks, inline edits).
 
 The backend (three Edge Functions and the database schema, code only) is mirrored in [`supabase/`](supabase/README.md).
