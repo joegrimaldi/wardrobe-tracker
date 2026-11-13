@@ -435,7 +435,7 @@ function fail(where, e){
 }
 
 /* ---- poor-signal plumbing ---- */
-const BUILD = '2026-11-13.1';
+const BUILD = '2026-11-13.2';
 const NET_TIMEOUT = 4000;      // how long a read may take before the phone's own copy is shown
 class TimeoutError extends Error { constructor(what){ super(`${what} timed out`); this.name = 'TimeoutError'; } }
 function withTimeout(p, ms=NET_TIMEOUT, what='The request'){
@@ -723,27 +723,13 @@ async function existingOutfit(date, slot){
   try { const o = await withTimeout(fetchOutfit(date, slot), NET_TIMEOUT, 'Loading'); netOk(); return o; }
   catch (e) { if (isNetError(e)){ netFailed(); return local(); } throw e; }
 }
-/* Server write = replace the outfit's item list. Idempotent for a given (date, slot, items). */
+/* Server write = make the (date, slot) log hold exactly these items, in one database
+   transaction (public.save_outfit). Idempotent for a given (date, slot, items). */
 async function saveOutfitRemote({date, slot, itemIds, tripId, photoPath}){
   if (!itemIds.length) throw new Error('nothing selected');
-  const existing = await fetchOutfit(date, slot);
-  let id;
-  if (existing){
-    id = existing.id;
-    const patch = {};
-    if (tripId && !existing.trip_id) patch.trip_id = tripId;
-    if (photoPath) patch.photo_ref = photoPath;
-    if (Object.keys(patch).length){ const { error } = await sb.from('outfits').update(patch).eq('id', id); if (error) throw error; }
-  } else {
-    const row = { worn_on:date, slot, source:'app' };
-    if (tripId) row.trip_id = tripId;
-    if (photoPath) row.photo_ref = photoPath;
-    const { data, error } = await sb.from('outfits').insert(row).select('id').single();
-    if (error) throw error; id = data.id;
-  }
-  const del = await sb.from('outfit_items').delete().eq('outfit_id', id); if (del.error) throw del.error;
-  const ins = await sb.from('outfit_items').insert(itemIds.map(item_id => ({outfit_id:id, item_id}))); if (ins.error) throw ins.error;
-  return id;
+  const { data, error } = await sb.rpc('save_outfit', { p_worn_on:date, p_slot:slot, p_item_ids:itemIds, p_trip_id:tripId||null, p_photo_ref:photoPath||null });
+  if (error) throw error;
+  return data;
 }
 /* THE one way an outfit is logged (picker Save, Wear again, Trip "Wore this").
    Online it writes to the server. With no connection, or if the server does not
@@ -1208,13 +1194,9 @@ async function editOutfit({o, date, slot, itemIds}){
   }
   const before = new Set(o.items), after = new Set(itemIds);
   const add = itemIds.filter(id => !before.has(id)), remove = o.items.filter(id => !after.has(id));
-  try {
-    if (moved){
-      const { error } = await withTimeout(sb.from('outfits').update({ worn_on:date, slot }).eq('id', o.id), 10000, 'Moving the log');
-      if (error) throw error.code === '23505' ? new Error(`There is already a ${SLOT[slot]||slot} log on ${fmtShort(date)}`) : error;
-    }
-    if (remove.length){ const { error } = await withTimeout(sb.from('outfit_items').delete().eq('outfit_id', o.id).in('item_id', remove), 10000, 'Saving'); if (error) throw error; }
-    if (add.length){ const { error } = await withTimeout(sb.from('outfit_items').insert(add.map(item_id => ({ outfit_id:o.id, item_id }))), 10000, 'Saving'); if (error) throw error; }
+  try {                                                            // one transaction: move + item changes (public.edit_outfit)
+    const { error } = await withTimeout(sb.rpc('edit_outfit', { p_id:o.id, p_worn_on:date, p_slot:slot, p_item_ids:itemIds }), 10000, moved ? 'Moving the log' : 'Saving');
+    if (error) throw error.code === '23505' ? new Error(`There is already a ${SLOT[slot]||slot} log on ${fmtShort(date)}`) : error;
   } catch (e) { if (isNetError(e)) netFailed(); throw e; }
   netOk();
   setOutfits((state.serverOutfits||[]).map(r => r.id === o.id ? {...r, worn_on:date, slot, outfit_items:itemIds.map(item_id => ({item_id}))} : r));
@@ -1224,8 +1206,7 @@ async function editOutfit({o, date, slot, itemIds}){
 async function deleteOutfit(o){
   if (o.queued && typeof o.id === 'string'){ queueDrop(e => e.worn_on===o.worn_on && e.slot===o.slot); setOutfits(state.serverOutfits||[]); updateNetBar(); return; }
   if (likelyDown()) throw new Error('Deleting a log needs a connection');
-  const d1 = await withTimeout(sb.from('outfit_items').delete().eq('outfit_id', o.id), 10000, 'Deleting'); if (d1.error) throw d1.error;
-  const d2 = await withTimeout(sb.from('outfits').delete().eq('id', o.id), 10000, 'Deleting'); if (d2.error) throw d2.error;
+  const d = await withTimeout(sb.from('outfits').delete().eq('id', o.id), 10000, 'Deleting'); if (d.error) throw d.error;   // outfit_items rows go with it (ON DELETE CASCADE)
   queueDrop(e => e.worn_on===o.worn_on && e.slot===o.slot);
   setOutfits((state.serverOutfits||[]).filter(r => r.id !== o.id)); saveSnapshot();
 }
