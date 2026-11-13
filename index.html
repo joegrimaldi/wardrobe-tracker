@@ -435,7 +435,7 @@ function fail(where, e){
 }
 
 /* ---- poor-signal plumbing ---- */
-const BUILD = '2026-11-13.2';
+const BUILD = '2026-11-13.3';
 const NET_TIMEOUT = 4000;      // how long a read may take before the phone's own copy is shown
 class TimeoutError extends Error { constructor(what){ super(`${what} timed out`); this.name = 'TimeoutError'; } }
 function withTimeout(p, ms=NET_TIMEOUT, what='The request'){
@@ -2099,21 +2099,41 @@ async function saveSelfie(){
    Auth + start
    ------------------------------------------------------------ */
 function showAuth(){
+  // Email-code sign-in: no password to remember. shouldCreateUser:false keeps sign-up closed.
   $('#layer').innerHTML = `<div class="sheet" role="dialog" aria-label="Sign in"><div class="sheet-body" style="padding-top:calc(var(--sat) + 60px)"><div class="stack">
-    <div class="stack tight"><div class="lbl">Wardrobe</div><h1>Sign in</h1><div class="hint">Once per device. You stay signed in.</div></div>
+    <div class="stack tight"><div class="lbl">Wardrobe</div><h1>Sign in</h1><div class="hint" id="authhint">We'll email you a sign-in code. Once per device; you stay signed in.</div></div>
     <form id="authform" class="stack tight" style="gap:12px">
       <input class="input" type="email" id="email" placeholder="Email" autocomplete="username" required>
-      <input class="input" type="password" id="pw" placeholder="Password" autocomplete="current-password" required>
+      <button class="btn primary big" type="submit" id="sendcode">Email me a code</button>
+    </form>
+    <form id="codeform" class="stack tight" style="gap:12px;display:none">
+      <input class="input" type="text" id="code" placeholder="Code from the email" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required>
       <button class="btn primary big" type="submit" id="signin">Sign in</button>
+      <button class="btn" type="button" id="resend">Use a different email or resend</button>
     </form>
     <div id="autherr" class="small" style="color:var(--warn)"></div>
   </div></div></div>`;
+  let email = localStorage.getItem('wt-last-email') || '';
+  $('#email').value = email;
+  const err = m => { $('#autherr').textContent = m || ''; };
   $('#authform').onsubmit = async e => {
-    e.preventDefault(); const b=$('#signin'); b.disabled=true; b.textContent='Signing in…'; $('#autherr').textContent='';
-    const { error } = await sb.auth.signInWithPassword({ email:$('#email').value.trim(), password:$('#pw').value });
-    if (error){ $('#autherr').textContent = error.message; b.disabled=false; b.textContent='Sign in'; }
+    e.preventDefault(); const b=$('#sendcode'); b.disabled=true; b.textContent='Sending…'; err();
+    email = $('#email').value.trim();
+    const { error } = await sb.auth.signInWithOtp({ email, options:{ shouldCreateUser:false } });
+    b.disabled=false; b.textContent='Email me a code';
+    if (error){ err(error.message); return; }
+    try { localStorage.setItem('wt-last-email', email); } catch {}
+    $('#authform').style.display='none'; $('#codeform').style.display='';
+    $('#authhint').textContent = `Code sent to ${email}. It can take a minute; check spam.`;
+    $('#code').focus();
+  };
+  $('#codeform').onsubmit = async e => {
+    e.preventDefault(); const b=$('#signin'); b.disabled=true; b.textContent='Signing in…'; err();
+    const { error } = await sb.auth.verifyOtp({ email, token:$('#code').value.replace(/\s/g,''), type:'email' });
+    if (error){ err(error.message); b.disabled=false; b.textContent='Sign in'; }
     // success: onAuthStateChange → start()
   };
+  $('#resend').onclick = () => { $('#codeform').style.display='none'; $('#authform').style.display=''; err(); };
 }
 /* Start = show something within NET_TIMEOUT. The network load and the phone's
    snapshot race: fresh data wins if it is quick; otherwise the snapshot is
