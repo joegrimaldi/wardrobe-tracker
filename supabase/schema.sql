@@ -1,8 +1,8 @@
 -- Wardrobe tracker: database schema (schema only, no row data)
 -- Supabase project sobshyactzxhtsayemkj. Captured 2026-11-12, after migration
 -- 20261112204430 (tmp_backup_export_close). Hand-updated 2026-11-13 for the
--- migrations listed in README.md through revoke_rls_auto_enable_execute
--- (private bucket, owner-scoped policies, revoked EXECUTE); the md5 below refers
+-- migrations listed in README.md through atomic_outfit_writes
+-- (private bucket, owner-scoped policies, revoked EXECUTE, outfit RPCs); the md5 below refers
 -- to the 2026-11-12 capture.
 --
 -- How this file was made: generated from the live system catalogs
@@ -13,7 +13,7 @@
 -- (md5 98d08864ea594ee23610b7dc70f631a2, 23,625 bytes).
 --
 -- Scope: everything the app owns in schema `public` (enums, tables, constraints,
--- indexes, comments, views, the one SQL function and its event trigger, row-level
+-- indexes, comments, views, the SQL functions (rls_auto_enable and its event trigger; save_outfit, edit_outfit), row-level
 -- security, table privileges) plus the storage policies on storage.objects.
 -- Not included: Supabase-managed schemas (auth, storage internals, vault,
 -- extensions), object ownership, default privileges, and any rows.
@@ -386,6 +386,58 @@ END;
 $function$
 ;
 -- EXECUTE on public.rls_auto_enable() is held by: postgres, service_role (revoked from PUBLIC, anon, authenticated in migration 20261113031447)
+
+-- Atomic outfit writes (migration atomic_outfit_writes, 13 Nov 2026). SECURITY INVOKER, so RLS applies.
+CREATE OR REPLACE FUNCTION public.edit_outfit(p_id bigint, p_worn_on date, p_slot outfit_slot, p_item_ids bigint[])
+ RETURNS bigint
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+begin
+  if p_item_ids is null or cardinality(p_item_ids) = 0 then
+    raise exception 'nothing selected' using errcode = '22023';
+  end if;
+  -- Moving onto a (day, slot) that already has a log raises 23505 (outfits_worn_on_slot_key).
+  update public.outfits set worn_on = p_worn_on, slot = p_slot where id = p_id;
+  if not found then
+    raise exception 'log % not found', p_id using errcode = 'P0002';
+  end if;
+  delete from public.outfit_items where outfit_id = p_id and item_id <> all (p_item_ids);
+  insert into public.outfit_items (outfit_id, item_id)
+  select p_id, x from (select distinct unnest(p_item_ids) as x) s
+  on conflict (outfit_id, item_id) do nothing;
+  return p_id;
+end;
+$function$
+;
+CREATE OR REPLACE FUNCTION public.save_outfit(p_worn_on date, p_slot outfit_slot, p_item_ids bigint[], p_trip_id bigint DEFAULT NULL::bigint, p_photo_ref text DEFAULT NULL::text)
+ RETURNS bigint
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+declare
+  v_id bigint;
+begin
+  if p_item_ids is null or cardinality(p_item_ids) = 0 then
+    raise exception 'nothing selected' using errcode = '22023';
+  end if;
+  -- Create the (day, slot) log, or reuse it: keep an existing trip, replace the photo only when a new one is given.
+  insert into public.outfits as o (worn_on, slot, source, trip_id, photo_ref)
+  values (p_worn_on, p_slot, 'app', p_trip_id, p_photo_ref)
+  on conflict (worn_on, slot) do update
+    set trip_id   = coalesce(o.trip_id, excluded.trip_id),
+        photo_ref = coalesce(excluded.photo_ref, o.photo_ref)
+  returning o.id into v_id;
+
+  delete from public.outfit_items where outfit_id = v_id and item_id <> all (p_item_ids);
+  insert into public.outfit_items (outfit_id, item_id)
+  select v_id, x from (select distinct unnest(p_item_ids) as x) s
+  on conflict (outfit_id, item_id) do nothing;
+  return v_id;
+end;
+$function$
+;
+-- EXECUTE on public.save_outfit(...) and public.edit_outfit(...) is held by: authenticated, postgres, service_role (revoked from PUBLIC, anon)
 
 -- ===== Triggers =====
 -- none

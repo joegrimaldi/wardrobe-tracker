@@ -28,7 +28,7 @@ All three answer `POST` only, run as the calling user (the user's token, never t
 and send `Access-Control-Allow-Origin: https://joegrimaldi.github.io`. If the page ever moves to
 another origin, that header must change in all three files.
 
-`schema.sql` reflects the database after migration `20261113031447`. Applied migrations, oldest first:
+`schema.sql` reflects the database after migration `20261113032047`. Applied migrations, oldest first:
 
 | Version | Name |
 | --- | --- |
@@ -45,6 +45,7 @@ another origin, that header must change in all three files.
 | 20261113030339 | item_photos_bucket_private |
 | 20261113031427 | owner_scoped_rls |
 | 20261113031447 | revoke_rls_auto_enable_execute |
+| 20261113032047 | atomic_outfit_writes |
 
 The earliest tables were created before migrations were used, so the migrations alone do not rebuild
 the schema. `schema.sql` does. It supersedes the project document `schema.sql` (v1), which is stale.
