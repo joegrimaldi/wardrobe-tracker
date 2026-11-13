@@ -435,7 +435,7 @@ function fail(where, e){
 }
 
 /* ---- poor-signal plumbing ---- */
-const BUILD = '2026-11-12.1';
+const BUILD = '2026-11-13.1';
 const NET_TIMEOUT = 4000;      // how long a read may take before the phone's own copy is shown
 class TimeoutError extends Error { constructor(what){ super(`${what} timed out`); this.name = 'TimeoutError'; } }
 function withTimeout(p, ms=NET_TIMEOUT, what='The request'){
